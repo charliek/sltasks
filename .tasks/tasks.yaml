@@ -1,0 +1,12 @@
+# Auto-generated - do not edit manually
+version: 1
+columns:
+  todo:
+  - fix-login-bug.md
+  - add-dark-mode.md
+  in_progress:
+  - refactor-api.md
+  done:
+  - write-docs.md
+  - setup-ci.md
+  archived: []

@@ -15,32 +15,41 @@ This phase implements the initial Textual application with a 3-column Kanban boa
 
 ## Task Checklist
 
-- [ ] Create `src/kosmos/app.py`:
-  - [ ] `KosmosApp` Textual App class
-  - [ ] CSS styling setup
-  - [ ] Service initialization
-- [ ] Create `src/kosmos/ui/screens/board.py`:
-  - [ ] `BoardScreen` main screen
-  - [ ] 3-column horizontal layout
-  - [ ] Load and display tasks on mount
-- [ ] Create `src/kosmos/ui/widgets/column.py`:
-  - [ ] `KanbanColumn` widget
-  - [ ] Header with title and count
-  - [ ] Container for task cards
-- [ ] Create `src/kosmos/ui/widgets/task_card.py`:
-  - [ ] `TaskCard` widget
-  - [ ] Display title, priority indicator, tags
-- [ ] Create `src/kosmos/ui/styles.py`:
-  - [ ] CSS styles for the app
-  - [ ] Priority colors
-  - [ ] Column layout
-- [ ] Update `src/kosmos/__main__.py`:
-  - [ ] Parse CLI arguments
-  - [ ] Launch the app
-- [ ] Create `src/kosmos/config/settings.py`:
-  - [ ] `Settings` Pydantic Settings class
-  - [ ] task_root configuration
-- [ ] Update all `__init__.py` files with exports
+- [x] Create `src/kosmos/app.py`:
+  - [x] `KosmosApp` Textual App class
+  - [x] CSS styling setup (via CSS_PATH)
+  - [x] Service initialization
+  - [x] `action_refresh()` to reload board
+  - [x] `action_help()` placeholder
+- [x] Create `src/kosmos/ui/screens/board.py`:
+  - [x] `BoardScreen` main screen
+  - [x] 3-column horizontal layout
+  - [x] Load and display tasks on mount
+  - [x] `refresh_board()` method
+- [x] Create `src/kosmos/ui/widgets/column.py`:
+  - [x] `KanbanColumn` widget
+  - [x] Header with title and count
+  - [x] Container for task cards (VerticalScroll)
+  - [x] `set_tasks()` method
+- [x] Create `src/kosmos/ui/widgets/task_card.py`:
+  - [x] `TaskCard` widget (focusable)
+  - [x] Display title, priority indicator, tags
+  - [x] Priority color indicators
+- [x] Create `src/kosmos/ui/styles.tcss`:
+  - [x] CSS styles for the app
+  - [x] Priority colors
+  - [x] Column layout
+  - [x] Task card focus/hover states
+- [x] Update `src/kosmos/__main__.py`:
+  - [x] Parse CLI arguments (--task-root, --version, --help)
+  - [x] Launch the app
+- [x] Create `src/kosmos/config/settings.py`:
+  - [x] `Settings` Pydantic Settings class
+  - [x] task_root configuration
+  - [x] editor configuration
+  - [x] KOSMOS_ env prefix
+- [x] Update all `__init__.py` files with exports
+- [x] Create sample tasks in .tasks/ for testing
 
 ## Detailed Specifications
 
@@ -489,11 +498,40 @@ For this phase, manual testing is primary:
 
 ## Deviations from Plan
 
-_This section will be updated if implementation differs from the plan._
-
 | Date | Deviation | Reason |
 |------|-----------|--------|
-| - | - | - |
+| 2025-11-28 | Used `.tcss` file instead of `styles.py` | Textual convention is to use .tcss files for CSS |
+| 2025-11-28 | TaskCard is focusable (`can_focus=True`) | Prep for navigation in later phases |
+| 2025-11-28 | Added `action_refresh()` binding (r key) | Useful for testing file changes |
+
+## Completion Notes
+
+**Phase 5 completed on 2025-11-28**
+
+Files created:
+- `src/kosmos/config/settings.py` - Pydantic Settings class
+- `src/kosmos/ui/styles.tcss` - CSS styling
+- `src/kosmos/ui/widgets/task_card.py` - TaskCard widget
+- `src/kosmos/ui/widgets/column.py` - KanbanColumn widget
+- `src/kosmos/ui/screens/board.py` - BoardScreen
+- `src/kosmos/app.py` - KosmosApp main application
+- `.tasks/*.md` - 5 sample tasks for testing
+
+Verification:
+- All 61 tests passing
+- CLI `--help` and `--version` work correctly
+- App initializes and loads tasks correctly
+- Board displays 3 columns with tasks grouped by state
+
+To run the TUI:
+```bash
+uv run kosmos
+```
+
+Bindings available:
+- `q` - Quit
+- `r` - Refresh board
+- `?` - Help (placeholder)
 
 ## Key Notes
 
