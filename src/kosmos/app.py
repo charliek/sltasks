@@ -141,11 +141,15 @@ class KosmosApp(App):
             state=screen.current_column_state,
         )
 
-        task_filename = task.filename
+        original_filename = task.filename
 
         # Open in editor
         with self.suspend():
             self.task_service.open_in_editor(task)
+
+        # Rename the file to match the (possibly updated) title
+        renamed_task = self.task_service.rename_task_to_match_title(original_filename)
+        task_filename = renamed_task.filename if renamed_task else original_filename
 
         # Reload and refresh, focusing the new task
         self.board_service.reload()

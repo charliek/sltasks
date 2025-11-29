@@ -59,6 +59,44 @@ class TaskService:
         """Delete a task by filename."""
         self.repository.delete(filename)
 
+    def rename_task_to_match_title(self, filename: str) -> Task | None:
+        """
+        Rename a task file to match its current title.
+
+        Reads the task, generates a new filename from the title,
+        and renames the file if needed.
+
+        Returns the task with updated filename, or None if task not found.
+        """
+        task = self.repository.get_by_id(filename)
+        if task is None:
+            return None
+
+        # Generate filename from current title
+        new_filename = generate_filename(task.title)
+
+        # If filename would be the same, nothing to do
+        if new_filename == filename:
+            return task
+
+        # Ensure unique filename
+        new_filename = self._unique_filename(new_filename)
+
+        # Rename the file
+        if task.filepath and task.filepath.exists():
+            new_filepath = task.filepath.parent / new_filename
+            task.filepath.rename(new_filepath)
+
+            # Update task with new filename/filepath
+            old_filename = task.filename
+            task.filename = new_filename
+            task.filepath = new_filepath
+
+            # Update board order to reflect the rename
+            self.repository.rename_in_board_order(old_filename, new_filename)
+
+        return task
+
     def get_task(self, filename: str) -> Task | None:
         """Get a task by filename."""
         return self.repository.get_by_id(filename)

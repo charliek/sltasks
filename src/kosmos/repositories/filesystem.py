@@ -104,6 +104,21 @@ class FilesystemRepository:
         self._board_order = order
         self._save_board_order()
 
+    def rename_in_board_order(self, old_filename: str, new_filename: str) -> None:
+        """Rename a task in the board order."""
+        self._ensure_board_order()
+        if self._board_order is None:
+            return
+
+        # Find and replace the filename in all columns
+        for column in self._board_order.columns.values():
+            for i, filename in enumerate(column):
+                if filename == old_filename:
+                    column[i] = new_filename
+                    break
+
+        self._save_board_order()
+
     # --- Reload Support ---
 
     def reload(self) -> None:
