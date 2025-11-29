@@ -13,23 +13,28 @@ This phase creates the core data models using Pydantic. These models define the 
 
 ## Task Checklist
 
-- [ ] Create `src/kosmos/models/enums.py`:
-  - [ ] `TaskState` enum (todo, in_progress, done, archived)
-  - [ ] `Priority` enum (low, medium, high, critical)
-- [ ] Create `src/kosmos/models/task.py`:
-  - [ ] `Task` Pydantic model with all fields
-  - [ ] Default values matching PRD spec
-  - [ ] `to_frontmatter()` method for serialization
-  - [ ] `from_frontmatter()` class method for parsing
-- [ ] Create `src/kosmos/models/board.py`:
-  - [ ] `BoardOrder` Pydantic model
-  - [ ] Column ordering structure
-- [ ] Update `src/kosmos/models/__init__.py` with exports
-- [ ] Create `src/kosmos/utils/slug.py`:
-  - [ ] `slugify()` function for filename generation
-- [ ] Create `src/kosmos/utils/datetime.py`:
-  - [ ] ISO datetime helpers
-- [ ] Write tests for complex logic (slug generation)
+- [x] Create `src/kosmos/models/enums.py`:
+  - [x] `TaskState` enum (todo, in_progress, done, archived)
+  - [x] `Priority` enum (low, medium, high, critical)
+- [x] Create `src/kosmos/models/task.py`:
+  - [x] `Task` Pydantic model with all fields
+  - [x] Default values matching PRD spec
+  - [x] `to_frontmatter()` method for serialization
+  - [x] `from_frontmatter()` class method for parsing
+- [x] Create `src/kosmos/models/board.py`:
+  - [x] `BoardOrder` Pydantic model
+  - [x] `Board` model for full board state with tasks grouped by column
+  - [x] Column ordering structure
+- [x] Update `src/kosmos/models/__init__.py` with exports
+- [x] Create `src/kosmos/utils/slug.py`:
+  - [x] `slugify()` function for filename generation
+  - [x] `generate_filename()` function
+- [x] Create `src/kosmos/utils/datetime.py`:
+  - [x] `now_utc()` - get current UTC datetime
+  - [x] `to_iso()` - convert to ISO string
+  - [x] `from_iso()` - parse ISO string
+- [x] Update `src/kosmos/utils/__init__.py` with exports
+- [x] Write tests for complex logic (slug generation) - 14 tests passing
 
 ## Detailed Specifications
 
@@ -277,11 +282,27 @@ Tests should focus on:
 
 ## Deviations from Plan
 
-_This section will be updated if implementation differs from the plan._
-
 | Date | Deviation | Reason |
 |------|-----------|--------|
-| - | - | - |
+| 2025-11-28 | Added `Board` model to board.py | Needed for Phase 5 TUI to group tasks by state for display |
+| 2025-11-28 | Added explicit type annotation `dict` in `to_frontmatter()` | Clarity for return type |
+
+## Completion Notes
+
+**Phase 2 completed on 2025-11-28**
+
+Files created:
+- `src/kosmos/models/enums.py` - TaskState and Priority enums
+- `src/kosmos/models/task.py` - Task Pydantic model
+- `src/kosmos/models/board.py` - BoardOrder and Board models
+- `src/kosmos/utils/slug.py` - slugify and generate_filename
+- `src/kosmos/utils/datetime.py` - now_utc, to_iso, from_iso
+- `tests/test_slug.py` - 14 tests for slug generation
+
+Verification:
+- All 14 slug tests passing
+- Models import correctly and serialize/deserialize as expected
+- Frontmatter round-trip works correctly
 
 ## Key Notes
 
