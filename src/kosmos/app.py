@@ -7,7 +7,7 @@ from textual.screen import ModalScreen
 from .config import Settings
 from .models import TaskState
 from .repositories import FilesystemRepository
-from .services import BoardService, FilterService, TaskService
+from .services import BoardService, ConfigService, FilterService, TaskService
 from .ui.screens.board import BoardScreen
 from .ui.widgets import CommandBar, ConfirmModal, HelpScreen, TaskPreviewModal
 
@@ -70,6 +70,7 @@ class KosmosApp(App):
 
     def _init_services(self) -> None:
         """Initialize repository and services."""
+        self.config_service = ConfigService(self.settings.task_root)
         self.repository = FilesystemRepository(self.settings.task_root)
         self.task_service = TaskService(self.repository)
         self.board_service = BoardService(self.repository)
