@@ -63,8 +63,8 @@ class BoardScreen(Screen):
             try:
                 column = self.query_one(f"#{column_id}", KanbanColumn)
                 column.set_tasks(tasks)
-            except Exception:
-                pass
+            except Exception as e:
+                self.log.error(f"Failed to load column {column_id}: {e}")
 
     def refresh_board(self) -> None:
         """Refresh the board display, preserving focus position."""

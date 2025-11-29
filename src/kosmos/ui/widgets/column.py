@@ -35,6 +35,11 @@ class KanbanColumn(Widget):
         yield Static(self._header_text, classes="column-header", id=f"header-{self.state.value}")
         yield VerticalScroll(classes="column-content", id=f"content-{self.state.value}")
 
+    def on_mount(self) -> None:
+        """Refresh tasks when column is mounted."""
+        if self._tasks:
+            self._refresh_tasks()
+
     @property
     def _header_text(self) -> str:
         """Header text with styled task count."""
@@ -44,13 +49,16 @@ class KanbanColumn(Widget):
     def set_tasks(self, tasks: list[Task]) -> None:
         """Set the tasks for this column."""
         self._tasks = tasks
-        self._refresh_tasks()
+        # Use call_after_refresh to ensure DOM is ready
+        self.call_after_refresh(self._refresh_tasks)
 
     def _refresh_tasks(self) -> None:
         """Refresh the task cards in this column."""
+        content_id = f"#content-{self.state.value}"
         try:
-            content = self.query_one(f"#content-{self.state.value}", VerticalScroll)
-        except Exception:
+            content = self.query_one(content_id, VerticalScroll)
+        except Exception as e:
+            self.log.error(f"Cannot find {content_id}: {e}")
             return
 
         # Remove existing task cards
@@ -62,7 +70,10 @@ class KanbanColumn(Widget):
             content.mount(EmptyColumnMessage(f"No {state_name} tasks"))
         else:
             for task in self._tasks:
-                content.mount(TaskCard(task, id=f"task-{task.filename}"))
+                # Remove .md extension for valid Textual ID
+                task_id = task.filename.replace(".md", "")
+                card = TaskCard(task, id=f"task-{task_id}")
+                content.mount(card)
 
         # Update header count
         try:
@@ -95,8 +106,9 @@ class KanbanColumn(Widget):
             return False
 
         task = self._tasks[index]
+        task_id = task.filename.replace(".md", "")
         try:
-            card = self.query_one(f"#task-{task.filename}", TaskCard)
+            card = self.query_one(f"#task-{task_id}", TaskCard)
             card.focus()
             return True
         except Exception:
@@ -111,8 +123,9 @@ class KanbanColumn(Widget):
     def get_focused_task_index(self) -> int:
         """Get index of currently focused task, or -1."""
         for i, task in enumerate(self._tasks):
+            task_id = task.filename.replace(".md", "")
             try:
-                card = self.query_one(f"#task-{task.filename}", TaskCard)
+                card = self.query_one(f"#task-{task_id}", TaskCard)
                 if card.has_focus:
                     return i
             except Exception:

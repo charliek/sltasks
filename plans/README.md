@@ -123,8 +123,8 @@ kosmos/
 | 6 | [Task Cards Enhancement](./phase-6-task-cards.md) | **Complete** |
 | 7 | [Keyboard Navigation](./phase-7-navigation.md) | **Complete** |
 | 8 | [Task Actions](./phase-8-actions.md) | Planned |
-| 9 | Filter/Command | Planned (docs later) |
-| 10 | Help Screen | Planned (docs later) |
+| 9 | [Filter & Command Bar](./phase-9-filter-command.md) | Planned |
+| 10 | [Help Screen](./phase-10-help-screen.md) | Planned |
 | 11 | Polish | Planned (docs later) |
 
 ## Design Decisions

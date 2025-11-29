@@ -1,6 +1,6 @@
 """Kosmos TUI Application."""
 
-from textual.app import App, ComposeResult
+from textual.app import App
 from textual.binding import Binding
 
 from .config import Settings
@@ -38,6 +38,10 @@ class KosmosApp(App):
         Binding("end", "nav_last", "Last", show=False),
     ]
 
+    SCREENS = {
+        "board": BoardScreen,
+    }
+
     def __init__(self, settings: Settings | None = None) -> None:
         super().__init__()
         self.settings = settings or Settings()
@@ -50,19 +54,18 @@ class KosmosApp(App):
         self.board_service = BoardService(self.repository)
         self.filter_service = FilterService()
 
-    def compose(self) -> ComposeResult:
-        """Create child widgets."""
-        yield BoardScreen()
-
     def on_mount(self) -> None:
         """Called when app is mounted."""
         # Ensure tasks directory exists
         self.repository.ensure_directory()
+        # Push the board screen
+        self.push_screen("board")
 
     def action_refresh(self) -> None:
         """Refresh the board."""
-        screen = self.query_one(BoardScreen)
-        screen.refresh_board()
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.refresh_board()
 
     def action_help(self) -> None:
         """Show help (placeholder for now)."""
@@ -71,33 +74,39 @@ class KosmosApp(App):
     # Navigation actions
     def action_nav_left(self) -> None:
         """Navigate to previous column."""
-        screen = self.query_one(BoardScreen)
-        screen.navigate_column(-1)
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.navigate_column(-1)
 
     def action_nav_right(self) -> None:
         """Navigate to next column."""
-        screen = self.query_one(BoardScreen)
-        screen.navigate_column(1)
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.navigate_column(1)
 
     def action_nav_up(self) -> None:
         """Navigate to previous task."""
-        screen = self.query_one(BoardScreen)
-        screen.navigate_task(-1)
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.navigate_task(-1)
 
     def action_nav_down(self) -> None:
         """Navigate to next task."""
-        screen = self.query_one(BoardScreen)
-        screen.navigate_task(1)
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.navigate_task(1)
 
     def action_nav_first(self) -> None:
         """Navigate to first task in column."""
-        screen = self.query_one(BoardScreen)
-        screen.navigate_to_task(0)
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.navigate_to_task(0)
 
     def action_nav_last(self) -> None:
         """Navigate to last task in column."""
-        screen = self.query_one(BoardScreen)
-        screen.navigate_to_task(-1)
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.navigate_to_task(-1)
 
 
 def run(settings: Settings | None = None) -> None:

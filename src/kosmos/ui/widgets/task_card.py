@@ -17,29 +17,34 @@ class TaskCard(Widget, can_focus=True):
         Priority.LOW: ("●", "green", "low"),
     }
 
-    def __init__(self, task: Task, *args, **kwargs) -> None:
+    def __init__(self, task_data: Task, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.task = task
+        self._task_data = task_data
+
+    @property
+    def task(self) -> Task:
+        """Get the task for this card."""
+        return self._task_data
 
     def compose(self) -> ComposeResult:
         """Create card layout."""
         # Title with truncation
-        title = self._truncate(self.task.display_title, 40)
+        title = self._truncate(self._task_data.display_title, 40)
         yield Static(title, classes="task-title")
 
         # Priority line
         symbol, color, label = self.PRIORITY_DISPLAY.get(
-            self.task.priority, ("●", "white", "medium")
+            self._task_data.priority, ("●", "white", "medium")
         )
         priority_text = f"[{color}]{symbol}[/] {label}"
         yield Static(priority_text, classes="task-priority")
 
         # Tags as chips
-        if self.task.tags:
+        if self._task_data.tags:
             yield Static(self._format_tags(), classes="task-tags")
 
         # Body preview (first non-empty line)
-        if self.task.body.strip():
+        if self._task_data.body.strip():
             preview = self._get_body_preview()
             if preview:
                 yield Static(preview, classes="task-preview")
@@ -53,18 +58,18 @@ class TaskCard(Widget, can_focus=True):
     def _format_tags(self) -> str:
         """Format tags for display as chips."""
         max_tags = 3
-        tags = self.task.tags[:max_tags]
+        tags = self._task_data.tags[:max_tags]
         formatted = " ".join(f"[dim]#{tag}[/]" for tag in tags)
 
-        if len(self.task.tags) > max_tags:
-            extra = len(self.task.tags) - max_tags
+        if len(self._task_data.tags) > max_tags:
+            extra = len(self._task_data.tags) - max_tags
             formatted += f" [dim]+{extra}[/]"
 
         return formatted
 
     def _get_body_preview(self) -> str:
         """Get first non-empty, non-heading line of body."""
-        for line in self.task.body.split("\n"):
+        for line in self._task_data.body.split("\n"):
             line = line.strip()
             if line and not line.startswith("#"):
                 return self._truncate(line, 50)
