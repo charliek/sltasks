@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from kosmos.services import ConfigService
+from sltasks.services import ConfigService
 
 
 @pytest.fixture

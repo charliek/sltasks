@@ -12,7 +12,7 @@ CONFIG_FILE = "sltasks.yml"
 
 # Header comments for generated file
 CONFIG_HEADER = """\
-# Kosmos Board Configuration
+# sltasks Board Configuration
 # Customize your kanban columns below (2-6 columns supported)
 #
 # Column constraints:

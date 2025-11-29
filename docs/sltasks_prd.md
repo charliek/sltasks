@@ -1,10 +1,10 @@
-# Kosmos – Product Requirements Document
+# sltasks – Product Requirements Document
 
-> **kosmos** (κόσμος) – from Greek, meaning "order, harmony" (opposite of chaos)
+> A terminal-based task management TUI (previously known as "Kosmos")
 
 ## 1. Overview
 
-**Kosmos** is a terminal-based Kanban interface (TUI) for managing tasks stored as Markdown files with YAML front matter. This tool provides lightweight, structured task management for personal projects without the overhead of solutions like Jira or GitHub Projects.
+**sltasks** is a terminal-based Kanban interface (TUI) for managing tasks stored as Markdown files with YAML front matter. This tool provides lightweight, structured task management for personal projects without the overhead of solutions like Jira or GitHub Projects.
 
 ### Core Principles
 
@@ -110,7 +110,7 @@ columns:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Kosmos                                            [Filter: none]   │
+│  sltasks                                           [Filter: none]   │
 ├───────────────────┬───────────────────┬───────────────────┬─────────┤
 │ TO DO (3)         │ IN PROGRESS (1)   │ DONE (2)          │         │
 ├───────────────────┼───────────────────┼───────────────────┤         │
@@ -254,7 +254,7 @@ Press `?` to show overlay with:
 ### 4.1 CLI Flags (MVP)
 
 ```bash
-kosmos [OPTIONS]
+sltasks [OPTIONS]
 
 Options:
   --task-root <PATH>    Path to tasks directory (default: .tasks/)
@@ -264,7 +264,7 @@ Options:
 
 ### 4.2 Config File (Future)
 
-Location: `~/.config/kosmos/config.yaml` or `.tasks/config.yaml`
+Location: `~/.config/sltasks/config.yaml` or `.tasks/config.yaml`
 
 ```yaml
 keybindings:
@@ -305,11 +305,11 @@ default_priority: medium
 ### 5.2 Project Structure
 
 ```
-kosmos/
+sltasks/
 ├── pyproject.toml
 ├── README.md
 ├── src/
-│   └── kosmos/
+│   └── sltasks/
 │       ├── __init__.py
 │       ├── __main__.py              # CLI entry point
 │       ├── app.py                   # Textual application
@@ -482,7 +482,7 @@ class Settings(BaseSettings):
     )
     
     class Config:
-        env_prefix = "KOSMOS_"
+        env_prefix = "SLTASKS_"
 ```
 
 ### 5.5 Data Flow

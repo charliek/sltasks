@@ -3,10 +3,10 @@
 import pytest
 from pathlib import Path
 
-from kosmos.models import Board, BoardConfig, ColumnConfig, Task
-from kosmos.models.task import STATE_ARCHIVED
-from kosmos.repositories import FilesystemRepository
-from kosmos.services import ConfigService, FilterService, TaskService, BoardService
+from sltasks.models import Board, BoardConfig, ColumnConfig, Task
+from sltasks.models.task import STATE_ARCHIVED
+from sltasks.repositories import FilesystemRepository
+from sltasks.services import ConfigService, FilterService, TaskService, BoardService
 
 
 @pytest.fixture

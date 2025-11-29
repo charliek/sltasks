@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from kosmos.models import BoardConfig, ColumnConfig, SltasksConfig
+from sltasks.models import BoardConfig, ColumnConfig, SltasksConfig
 
 
 class TestColumnConfig:

@@ -1,4 +1,4 @@
-"""Kosmos TUI Application."""
+"""sltasks TUI Application."""
 
 from textual.app import App
 from textual.binding import Binding
@@ -11,10 +11,10 @@ from .ui.screens.board import BoardScreen
 from .ui.widgets import CommandBar, ConfirmModal, HelpScreen, TaskPreviewModal
 
 
-class KosmosApp(App):
-    """Kosmos - Terminal Kanban TUI."""
+class SltasksApp(App):
+    """sltasks - Terminal Kanban TUI."""
 
-    TITLE = "Kosmos"
+    TITLE = "sltasks"
 
     CSS_PATH = "ui/styles.tcss"
 
@@ -405,6 +405,6 @@ class KosmosApp(App):
 
 
 def run(settings: Settings | None = None) -> None:
-    """Run the Kosmos application."""
-    app = KosmosApp(settings)
+    """Run the sltasks application."""
+    app = SltasksApp(settings)
     app.run()

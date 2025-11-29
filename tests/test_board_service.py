@@ -3,15 +3,15 @@
 import pytest
 from pathlib import Path
 
-from kosmos.models import Task, Priority
-from kosmos.models.task import (
+from sltasks.models import Task, Priority
+from sltasks.models.task import (
     STATE_ARCHIVED,
     STATE_DONE,
     STATE_IN_PROGRESS,
     STATE_TODO,
 )
-from kosmos.repositories import FilesystemRepository
-from kosmos.services import BoardService
+from sltasks.repositories import FilesystemRepository
+from sltasks.services import BoardService
 
 
 @pytest.fixture

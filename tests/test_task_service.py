@@ -3,10 +3,10 @@
 import pytest
 from pathlib import Path
 
-from kosmos.models import Task, Priority
-from kosmos.models.task import STATE_TODO, STATE_IN_PROGRESS
-from kosmos.repositories import FilesystemRepository
-from kosmos.services import TaskService
+from sltasks.models import Task, Priority
+from sltasks.models.task import STATE_TODO, STATE_IN_PROGRESS
+from sltasks.repositories import FilesystemRepository
+from sltasks.services import TaskService
 
 
 @pytest.fixture

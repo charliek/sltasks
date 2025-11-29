@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from kosmos.models.sltasks_config import BoardConfig, SltasksConfig
+from sltasks.models.sltasks_config import BoardConfig, SltasksConfig
 
 logger = logging.getLogger(__name__)
 

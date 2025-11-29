@@ -2,7 +2,7 @@
 
 import pytest
 
-from kosmos.utils.slug import generate_filename, slugify
+from sltasks.utils.slug import generate_filename, slugify
 
 
 class TestSlugify:

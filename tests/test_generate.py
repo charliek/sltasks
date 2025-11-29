@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from kosmos.cli.generate import run_generate, generate_config_yaml, CONFIG_FILE
+from sltasks.cli.generate import run_generate, generate_config_yaml, CONFIG_FILE
 
 
 class TestGenerateConfigYaml:
@@ -25,14 +25,14 @@ class TestGenerateConfigYaml:
         """Generated content includes helpful comments."""
         content = generate_config_yaml()
 
-        assert "# Kosmos Board Configuration" in content
+        assert "# sltasks Board Configuration" in content
         assert "# Column constraints:" in content
         assert "# Example custom columns:" in content
 
     def test_matches_default_config(self):
         """Generated config matches SltasksConfig.default()."""
         import yaml
-        from kosmos.models import SltasksConfig
+        from sltasks.models import SltasksConfig
 
         content = generate_config_yaml()
         parsed = yaml.safe_load(content)
@@ -113,7 +113,7 @@ class TestRunGenerate:
 
     def test_generated_config_is_valid(self, tmp_path: Path):
         """Generated config can be loaded by ConfigService."""
-        from kosmos.services import ConfigService
+        from sltasks.services import ConfigService
 
         task_root = tmp_path / ".tasks"
         run_generate(task_root)
@@ -126,8 +126,8 @@ class TestRunGenerate:
 
     def test_generated_matches_model_default(self, tmp_path: Path):
         """Generated config matches SltasksConfig.default()."""
-        from kosmos.services import ConfigService
-        from kosmos.models import SltasksConfig
+        from sltasks.services import ConfigService
+        from sltasks.models import SltasksConfig
 
         task_root = tmp_path / ".tasks"
         run_generate(task_root)
@@ -148,7 +148,7 @@ class TestOutputHelpers:
 
     def test_success_prints_checkmark(self, capsys):
         """success() prints message with checkmark."""
-        from kosmos.cli.output import success
+        from sltasks.cli.output import success
 
         success("Test message")
         captured = capsys.readouterr()
@@ -158,7 +158,7 @@ class TestOutputHelpers:
 
     def test_info_prints_bullet(self, capsys):
         """info() prints message with bullet."""
-        from kosmos.cli.output import info
+        from sltasks.cli.output import info
 
         info("Info message")
         captured = capsys.readouterr()

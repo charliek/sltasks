@@ -2,7 +2,7 @@
 
 import pytest
 
-from kosmos.models import (
+from sltasks.models import (
     Priority,
     Task,
     STATE_TODO,
@@ -10,7 +10,7 @@ from kosmos.models import (
     STATE_DONE,
     STATE_ARCHIVED,
 )
-from kosmos.services import Filter, FilterService
+from sltasks.services import Filter, FilterService
 
 
 @pytest.fixture

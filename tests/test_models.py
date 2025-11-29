@@ -3,9 +3,9 @@
 import pytest
 from datetime import datetime, timezone
 
-from kosmos.models import Task, Priority, Board, BoardOrder
-from kosmos.models import BoardConfig, ColumnConfig
-from kosmos.models.task import (
+from sltasks.models import Task, Priority, Board, BoardOrder
+from sltasks.models import BoardConfig, ColumnConfig
+from sltasks.models.task import (
     STATE_TODO,
     STATE_IN_PROGRESS,
     STATE_DONE,

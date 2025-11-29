@@ -1,4 +1,4 @@
-"""CLI entry point for Kosmos."""
+"""CLI entry point for sltasks."""
 
 import argparse
 from pathlib import Path
@@ -9,7 +9,7 @@ from .config import Settings
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        prog="kosmos",
+        prog="sltasks",
         description="Terminal-based Kanban TUI for markdown task management",
     )
     parser.add_argument(
