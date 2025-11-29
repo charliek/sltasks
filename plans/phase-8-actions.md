@@ -15,44 +15,44 @@ This phase implements the core actions users can perform on tasks: creating new 
 
 ## Task Checklist
 
-- [ ] Add action key bindings in `KosmosApp`:
-  - [ ] `n` - Create new task
-  - [ ] `e` / `Enter` - Edit current task
-  - [ ] `m` - Move mode (then h/l to move between columns)
-  - [ ] `H` / `Shift+←` - Move task to previous column
-  - [ ] `L` / `Shift+→` - Move task to next column
-  - [ ] `K` / `Shift+↑` - Move task up in column
-  - [ ] `J` / `Shift+↓` - Move task down in column
-  - [ ] `a` - Archive current task
-  - [ ] `d` - Delete current task (with confirmation)
-  - [ ] `Space` - Quick state toggle
-- [ ] Implement task creation:
-  - [ ] Open editor with template
-  - [ ] Parse created file
-  - [ ] Add to board and refresh
-- [ ] Implement task editing:
-  - [ ] Open current task in editor
-  - [ ] Reload task after editor closes
-  - [ ] Refresh board display
-- [ ] Implement column movement:
-  - [ ] Use BoardService.move_task_left/right
-  - [ ] Update focus to follow task
-  - [ ] Handle edge cases (already at first/last column)
-- [ ] Implement within-column reordering:
-  - [ ] Add reorder_task method to BoardService
-  - [ ] Update board order file
-  - [ ] Maintain focus on moved task
-- [ ] Implement archive action:
-  - [ ] Use BoardService.archive_task
-  - [ ] Move focus to next task or previous
-  - [ ] Show brief notification
-- [ ] Implement delete action:
-  - [ ] Show confirmation modal
-  - [ ] Use TaskService.delete_task
-  - [ ] Update board and focus
-- [ ] Add confirmation modal widget:
-  - [ ] Simple yes/no dialog
-  - [ ] Keyboard navigable (y/n or Enter/Escape)
+- [x] Add action key bindings in `KosmosApp`:
+  - [x] `n` - Create new task
+  - [x] `e` / `Enter` - Edit current task
+  - [-] `m` - Move mode (deferred - direct H/L/J/K is sufficient)
+  - [x] `H` / `Shift+←` - Move task to previous column
+  - [x] `L` / `Shift+→` - Move task to next column
+  - [x] `K` / `Shift+↑` - Move task up in column
+  - [x] `J` / `Shift+↓` - Move task down in column
+  - [x] `a` - Archive current task
+  - [x] `d` - Delete current task (with confirmation)
+  - [x] `Space` - Quick state toggle
+- [x] Implement task creation:
+  - [x] Open editor with template
+  - [x] Parse created file
+  - [x] Add to board and refresh
+- [x] Implement task editing:
+  - [x] Open current task in editor
+  - [x] Reload task after editor closes
+  - [x] Refresh board display
+- [x] Implement column movement:
+  - [x] Use BoardService.move_task_left/right
+  - [x] Update focus to follow task
+  - [x] Handle edge cases (already at first/last column)
+- [x] Implement within-column reordering:
+  - [x] Add reorder_task method to BoardService
+  - [x] Update board order file
+  - [x] Maintain focus on moved task
+- [x] Implement archive action:
+  - [x] Use BoardService.archive_task
+  - [x] Move focus to next task or previous
+  - [x] Show brief notification
+- [x] Implement delete action:
+  - [x] Show confirmation modal
+  - [x] Use TaskService.delete_task
+  - [x] Update board and focus
+- [x] Add confirmation modal widget:
+  - [x] Simple yes/no dialog
+  - [x] Keyboard navigable (y/n or Enter/Escape)
 
 ## Detailed Specifications
 
@@ -442,11 +442,11 @@ Manual testing scenarios:
 
 ## Deviations from Plan
 
-_This section will be updated if implementation differs from the plan._
-
 | Date | Deviation | Reason |
 |------|-----------|--------|
-| - | - | - |
+| 2025-11-28 | Skipped `m` move mode | Direct H/L/J/K bindings are sufficient and more intuitive |
+| 2025-11-28 | Task creation uses simple title "New Task" | Editor opens immediately so user can set proper title |
+| 2025-11-28 | Focus behavior after move | Focus follows column change but stays at same index position |
 
 ## Key Notes
 

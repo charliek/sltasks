@@ -75,6 +75,41 @@ class BoardService:
         """Save the board order."""
         self.repository.save_board_order(order)
 
+    def reorder_task(self, filename: str, delta: int) -> bool:
+        """
+        Reorder task within its column.
+
+        Args:
+            filename: Task filename to reorder
+            delta: -1 to move up, 1 to move down
+
+        Returns:
+            True if task was moved
+        """
+        task = self.repository.get_by_id(filename)
+        if task is None:
+            return False
+
+        board_order = self.repository.get_board_order()
+        column = board_order.columns.get(task.state.value, [])
+
+        if filename not in column:
+            return False
+
+        current_idx = column.index(filename)
+        new_idx = current_idx + delta
+
+        # Check bounds
+        if new_idx < 0 or new_idx >= len(column):
+            return False
+
+        # Swap positions
+        column[current_idx], column[new_idx] = column[new_idx], column[current_idx]
+
+        # Save updated order
+        self.repository.save_board_order(board_order)
+        return True
+
     def reload(self) -> None:
         """Reload board state from filesystem."""
         self.repository.reload()
