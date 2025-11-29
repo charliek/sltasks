@@ -15,35 +15,35 @@ This phase implements full keyboard navigation for the kanban board. Users will 
 
 ## Task Checklist
 
-- [ ] Create navigation state management:
-  - [ ] Track current column index
-  - [ ] Track current task index within column
-  - [ ] Handle focus persistence across refreshes
-- [ ] Implement key bindings in `KosmosApp`:
-  - [ ] `h` / `←` - Move to previous column
-  - [ ] `l` / `→` - Move to next column
-  - [ ] `k` / `↑` - Move to previous task
-  - [ ] `j` / `↓` - Move to next task
-  - [ ] `g` / `Home` - Jump to first task in column
-  - [ ] `G` / `End` - Jump to last task in column
-- [ ] Update `BoardScreen`:
-  - [ ] Add focus management methods
-  - [ ] `focus_column(index)` - Focus a column
-  - [ ] `focus_task(column_index, task_index)` - Focus specific task
-  - [ ] `get_current_task()` - Get currently focused task
-- [ ] Update `KanbanColumn`:
-  - [ ] Add `focused` property
-  - [ ] Method to focus nth task
-  - [ ] Return focused task
-- [ ] Update `TaskCard`:
-  - [ ] Ensure proper focus handling
-  - [ ] Add `selected` class when focused
-- [ ] Handle edge cases:
-  - [ ] Empty columns (skip or show message)
-  - [ ] Moving past first/last column
-  - [ ] Moving past first/last task
-  - [ ] Columns with different task counts
-- [ ] Update CSS for focus states
+- [x] Create navigation state management:
+  - [x] Track current column index
+  - [x] Track current task index within column
+  - [x] Handle focus persistence across refreshes
+- [x] Implement key bindings in `KosmosApp`:
+  - [x] `h` / `←` - Move to previous column
+  - [x] `l` / `→` - Move to next column
+  - [x] `k` / `↑` - Move to previous task
+  - [x] `j` / `↓` - Move to next task
+  - [x] `g` / `Home` - Jump to first task in column
+  - [x] `G` / `End` - Jump to last task in column
+- [x] Update `BoardScreen`:
+  - [x] Add focus management methods
+  - [x] `navigate_column(delta)` - Navigate between columns
+  - [x] `navigate_task(delta)` - Navigate between tasks
+  - [x] `navigate_to_task(index)` - Jump to specific task
+  - [x] `get_current_task()` - Get currently focused task
+- [x] Update `KanbanColumn`:
+  - [x] `focus_task(index)` - Focus nth task
+  - [x] `get_task(index)` - Get task at index
+  - [x] `get_focused_task_index()` - Get focused task index
+- [x] Update `TaskCard`:
+  - [x] Ensure proper focus handling (already focusable from Phase 5)
+- [x] Handle edge cases:
+  - [x] Empty columns (task navigation does nothing)
+  - [x] Moving past first/last column (clamps to boundary)
+  - [x] Moving past first/last task (clamps to boundary)
+  - [x] Columns with different task counts (clamps task index)
+- [x] Update CSS for focus states (already complete from Phase 6)
 
 ## Detailed Specifications
 
@@ -322,11 +322,35 @@ Manual testing scenarios:
 
 ## Deviations from Plan
 
-_This section will be updated if implementation differs from the plan._
-
 | Date | Deviation | Reason |
 |------|-----------|--------|
-| - | - | - |
+| 2025-11-28 | No separate NavigationState dataclass | Simpler to use instance variables directly on BoardScreen |
+| 2025-11-28 | No `focused` property on KanbanColumn | Focus is managed via task cards directly |
+| 2025-11-28 | Initial focus set via `call_after_refresh` | Ensures widgets are mounted before focusing |
+
+## Completion Notes
+
+**Phase 7 completed on 2025-11-28**
+
+Files modified:
+- `src/kosmos/app.py` - Added navigation key bindings (hjkl, arrows, g/G, Home/End)
+- `src/kosmos/ui/screens/board.py` - Added navigation state and methods
+- `src/kosmos/ui/widgets/column.py` - Added focus_task, get_task, get_focused_task_index methods
+
+Verification:
+- All 61 tests passing
+- App imports correctly
+- Navigation bindings registered
+
+Key bindings available:
+- `h` / `←` - Previous column
+- `l` / `→` - Next column
+- `k` / `↑` - Previous task
+- `j` / `↓` - Next task
+- `g` / `Home` - First task in column
+- `G` / `End` - Last task in column
+- `r` - Refresh (preserves focus position)
+- `q` - Quit
 
 ## Key Notes
 

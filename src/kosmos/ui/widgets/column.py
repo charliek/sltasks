@@ -80,3 +80,41 @@ class KanbanColumn(Widget):
     def task_count(self) -> int:
         """Get the number of tasks in this column."""
         return len(self._tasks)
+
+    def focus_task(self, index: int) -> bool:
+        """
+        Focus the task at the given index.
+
+        Args:
+            index: Task index to focus
+
+        Returns:
+            True if a task was focused, False otherwise
+        """
+        if not self._tasks or index < 0 or index >= len(self._tasks):
+            return False
+
+        task = self._tasks[index]
+        try:
+            card = self.query_one(f"#task-{task.filename}", TaskCard)
+            card.focus()
+            return True
+        except Exception:
+            return False
+
+    def get_task(self, index: int) -> Task | None:
+        """Get task at index."""
+        if 0 <= index < len(self._tasks):
+            return self._tasks[index]
+        return None
+
+    def get_focused_task_index(self) -> int:
+        """Get index of currently focused task, or -1."""
+        for i, task in enumerate(self._tasks):
+            try:
+                card = self.query_one(f"#task-{task.filename}", TaskCard)
+                if card.has_focus:
+                    return i
+            except Exception:
+                pass
+        return -1

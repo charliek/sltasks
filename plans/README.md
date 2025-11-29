@@ -121,7 +121,7 @@ kosmos/
 | 4 | [Service Layer](./phase-4-services.md) | **Complete** |
 | 5 | [Basic TUI](./phase-5-basic-tui.md) | **Complete** |
 | 6 | [Task Cards Enhancement](./phase-6-task-cards.md) | **Complete** |
-| 7 | [Keyboard Navigation](./phase-7-navigation.md) | Planned |
+| 7 | [Keyboard Navigation](./phase-7-navigation.md) | **Complete** |
 | 8 | [Task Actions](./phase-8-actions.md) | Planned |
 | 9 | Filter/Command | Planned (docs later) |
 | 10 | Help Screen | Planned (docs later) |
