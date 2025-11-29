@@ -24,6 +24,10 @@ class BoardScreen(Screen):
         self._current_column = 0
         self._current_task = 0
         self._filter: Filter | None = None
+        # Pending focus state for deferred focus after refresh
+        self._pending_focus_filename: str | None = None
+        self._pending_column = 0
+        self._pending_task = 0
 
     def compose(self) -> ComposeResult:
         """Create the board layout."""
@@ -83,9 +87,15 @@ class BoardScreen(Screen):
             except Exception as e:
                 self.log.error(f"Failed to load column {column_id}: {e}")
 
-    def refresh_board(self) -> None:
-        """Refresh the board display, preserving focus position."""
-        # Save current position
+    def refresh_board(self, focus_task_filename: str | None = None) -> None:
+        """
+        Refresh the board display.
+
+        Args:
+            focus_task_filename: If provided, focus this task after refresh.
+                                If None, preserves current position.
+        """
+        # Save current position as fallback
         saved_column = self._current_column
         saved_task = self._current_task
 
@@ -93,11 +103,51 @@ class BoardScreen(Screen):
         self.app.board_service.reload()
         self.load_tasks()
 
-        # Restore position (clamped to valid range)
-        self._current_column = saved_column
+        # Store focus target for deferred application
+        self._pending_focus_filename = focus_task_filename
+        self._pending_column = saved_column
+        self._pending_task = saved_task
+
+        # Defer focus until after DOM is rebuilt (double-defer to ensure columns finish first)
+        self.call_after_refresh(self._schedule_pending_focus)
+
+    def _schedule_pending_focus(self) -> None:
+        """Schedule the pending focus after one more refresh cycle."""
+        # This ensures column _refresh_tasks has completed
+        self.call_after_refresh(self._apply_pending_focus)
+
+    def _find_task_position(self, filename: str) -> tuple[int, int] | None:
+        """
+        Find a task's position by filename.
+
+        Args:
+            filename: The task filename to search for
+
+        Returns:
+            (column_index, task_index) or None if not found
+        """
+        for col_idx in range(len(self.COLUMN_STATES)):
+            column = self._get_column(col_idx)
+            for task_idx, task in enumerate(column.tasks):
+                if task.filename == filename:
+                    return (col_idx, task_idx)
+        return None
+
+    def _apply_pending_focus(self) -> None:
+        """Apply pending focus after refresh completes."""
+        if self._pending_focus_filename:
+            # Find the task by filename
+            position = self._find_task_position(self._pending_focus_filename)
+            if position:
+                self._current_column, self._current_task = position
+                self._update_focus()
+                return
+
+        # Fallback: restore previous position (clamped to valid range)
+        self._current_column = self._pending_column
         column = self._get_column(self._current_column)
         if column.task_count > 0:
-            self._current_task = min(saved_task, column.task_count - 1)
+            self._current_task = min(self._pending_task, column.task_count - 1)
         else:
             self._current_task = 0
 

@@ -76,17 +76,37 @@ class TaskService:
         if task.filepath is None:
             return False
 
-        editor = os.environ.get("EDITOR", "vim")
+        # Try $EDITOR, then common fallbacks
+        editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+        if not editor:
+            # Try common editors in order of preference
+            for candidate in ["nvim", "vim", "vi", "nano"]:
+                if self._command_exists(candidate):
+                    editor = candidate
+                    break
+            else:
+                return False
+
+        # Handle editors with arguments (e.g., "zed --wait", "code --wait")
+        # Use shell=True to properly handle the command string
+        import shlex
+        editor_parts = shlex.split(editor)
+        editor_cmd = editor_parts + [str(task.filepath.absolute())]
 
         try:
             result = subprocess.run(
-                [editor, str(task.filepath)],
+                editor_cmd,
                 check=False,
             )
             return result.returncode == 0
         except FileNotFoundError:
             # Editor not found
             return False
+
+    def _command_exists(self, cmd: str) -> bool:
+        """Check if a command exists in PATH."""
+        import shutil
+        return shutil.which(cmd) is not None
 
     def _unique_filename(self, filename: str) -> str:
         """Ensure filename is unique by appending numbers if needed."""

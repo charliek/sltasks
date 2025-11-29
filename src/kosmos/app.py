@@ -141,13 +141,15 @@ class KosmosApp(App):
             state=screen.current_column_state,
         )
 
+        task_filename = task.filename
+
         # Open in editor
         with self.suspend():
             self.task_service.open_in_editor(task)
 
-        # Reload and refresh
+        # Reload and refresh, focusing the new task
         self.board_service.reload()
-        screen.refresh_board()
+        screen.refresh_board(focus_task_filename=task_filename)
         self.notify("Task created", timeout=2)
 
     def action_edit_task(self) -> None:
@@ -178,11 +180,10 @@ class KosmosApp(App):
         if task is None:
             return
 
-        result = self.board_service.move_task_left(task.filename)
+        task_filename = task.filename
+        result = self.board_service.move_task_left(task_filename)
         if result and result.state != task.state:
-            screen.refresh_board()
-            # Focus follows task to new column
-            screen.navigate_column(-1)
+            screen.refresh_board(focus_task_filename=task_filename)
             self.notify(f"Moved to {result.state.value.replace('_', ' ')}", timeout=2)
 
     def action_move_task_right(self) -> None:
@@ -195,11 +196,10 @@ class KosmosApp(App):
         if task is None:
             return
 
-        result = self.board_service.move_task_right(task.filename)
+        task_filename = task.filename
+        result = self.board_service.move_task_right(task_filename)
         if result and result.state != task.state:
-            screen.refresh_board()
-            # Focus follows task to new column
-            screen.navigate_column(1)
+            screen.refresh_board(focus_task_filename=task_filename)
             self.notify(f"Moved to {result.state.value.replace('_', ' ')}", timeout=2)
 
     def action_move_task_up(self) -> None:
@@ -212,9 +212,9 @@ class KosmosApp(App):
         if task is None:
             return
 
-        if self.board_service.reorder_task(task.filename, -1):
-            screen.refresh_board()
-            screen.navigate_task(-1)
+        task_filename = task.filename
+        if self.board_service.reorder_task(task_filename, -1):
+            screen.refresh_board(focus_task_filename=task_filename)
 
     def action_move_task_down(self) -> None:
         """Move current task down in column."""
@@ -226,9 +226,9 @@ class KosmosApp(App):
         if task is None:
             return
 
-        if self.board_service.reorder_task(task.filename, 1):
-            screen.refresh_board()
-            screen.navigate_task(1)
+        task_filename = task.filename
+        if self.board_service.reorder_task(task_filename, 1):
+            screen.refresh_board(focus_task_filename=task_filename)
 
     def action_archive_task(self) -> None:
         """Archive the current task."""
@@ -285,6 +285,8 @@ class KosmosApp(App):
         if task is None:
             return
 
+        task_filename = task.filename
+
         # Cycle through states
         state_cycle = {
             TaskState.TODO: TaskState.IN_PROGRESS,
@@ -293,8 +295,11 @@ class KosmosApp(App):
         }
 
         new_state = state_cycle.get(task.state, TaskState.TODO)
-        self.board_service.move_task(task.filename, new_state)
-        screen.refresh_board()
+        self.board_service.move_task(task_filename, new_state)
+
+        # Focus follows task to its new column
+        screen.refresh_board(focus_task_filename=task_filename)
+
         self.notify(f"State: {new_state.value.replace('_', ' ')}", timeout=2)
 
     # Filter actions
