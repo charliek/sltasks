@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime, timezone
 
-from kosmos.models import Task, TaskState, Priority, Board, BoardOrder
+from kosmos.models import Task, Priority, Board, BoardOrder
 from kosmos.models import BoardConfig, ColumnConfig
 from kosmos.models.task import (
     STATE_TODO,
@@ -123,23 +123,23 @@ class TestBoardFromTasks:
 
         board = Board.from_tasks(tasks)
 
-        assert len(board.todo) == 1
-        assert len(board.in_progress) == 1
-        assert len(board.done) == 1
-        assert len(board.archived) == 1
-        assert board.todo[0].filename == "t1.md"
-        assert board.in_progress[0].filename == "t2.md"
-        assert board.done[0].filename == "t3.md"
-        assert board.archived[0].filename == "t4.md"
+        assert len(board.get_column(STATE_TODO)) == 1
+        assert len(board.get_column(STATE_IN_PROGRESS)) == 1
+        assert len(board.get_column(STATE_DONE)) == 1
+        assert len(board.get_column(STATE_ARCHIVED)) == 1
+        assert board.get_column(STATE_TODO)[0].filename == "t1.md"
+        assert board.get_column(STATE_IN_PROGRESS)[0].filename == "t2.md"
+        assert board.get_column(STATE_DONE)[0].filename == "t3.md"
+        assert board.get_column(STATE_ARCHIVED)[0].filename == "t4.md"
 
     def test_from_tasks_empty_list(self):
         """from_tasks handles empty task list."""
         board = Board.from_tasks([])
 
-        assert board.todo == []
-        assert board.in_progress == []
-        assert board.done == []
-        assert board.archived == []
+        assert board.get_column(STATE_TODO) == []
+        assert board.get_column(STATE_IN_PROGRESS) == []
+        assert board.get_column(STATE_DONE) == []
+        assert board.get_column(STATE_ARCHIVED) == []
 
     def test_from_tasks_multiple_same_state(self):
         """from_tasks handles multiple tasks in same state."""
@@ -151,8 +151,8 @@ class TestBoardFromTasks:
 
         board = Board.from_tasks(tasks)
 
-        assert len(board.todo) == 3
-        filenames = [t.filename for t in board.todo]
+        assert len(board.get_column(STATE_TODO)) == 3
+        filenames = [t.filename for t in board.get_column(STATE_TODO)]
         assert filenames == ["t1.md", "t2.md", "t3.md"]
 
 
@@ -215,8 +215,8 @@ class TestBoardDynamicColumns:
 
         board = Board.from_tasks(tasks, config)
 
-        assert len(board.archived) == 1
-        assert board.archived[0].filename == "archived.md"
+        assert len(board.get_column(STATE_ARCHIVED)) == 1
+        assert board.get_column(STATE_ARCHIVED)[0].filename == "archived.md"
 
     def test_get_visible_columns(self):
         """get_visible_columns returns correct tuples."""
@@ -238,21 +238,6 @@ class TestBoardDynamicColumns:
         assert len(visible) == 2
         assert visible[0] == ("a", "Column A", board.get_column("a"))
         assert visible[1] == ("b", "Column B", board.get_column("b"))
-
-    def test_backwards_compat_properties(self):
-        """Old property names still work with default config."""
-        tasks = [
-            Task(filename="a.md", state=STATE_TODO),
-            Task(filename="b.md", state=STATE_IN_PROGRESS),
-            Task(filename="c.md", state=STATE_DONE),
-        ]
-
-        board = Board.from_tasks(tasks)
-
-        # Old property access still works
-        assert len(board.todo) == 1
-        assert len(board.in_progress) == 1
-        assert len(board.done) == 1
 
 
 class TestBoardOrderDynamic:

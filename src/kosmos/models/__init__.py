@@ -1,7 +1,7 @@
 """Data models."""
 
 from .board import Board, BoardOrder
-from .enums import Priority, TaskState
+from .enums import Priority
 from .sltasks_config import BoardConfig, ColumnConfig, SltasksConfig
 from .task import (
     STATE_ARCHIVED,
@@ -23,5 +23,4 @@ __all__ = [
     "STATE_IN_PROGRESS",
     "STATE_TODO",
     "Task",
-    "TaskState",
 ]

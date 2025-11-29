@@ -5,7 +5,6 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from .config import Settings
-from .models import TaskState
 from .repositories import FilesystemRepository
 from .services import BoardService, ConfigService, FilterService, TaskService
 from .ui.screens.board import BoardScreen
@@ -71,9 +70,9 @@ class KosmosApp(App):
     def _init_services(self) -> None:
         """Initialize repository and services."""
         self.config_service = ConfigService(self.settings.task_root)
-        self.repository = FilesystemRepository(self.settings.task_root)
-        self.task_service = TaskService(self.repository)
-        self.board_service = BoardService(self.repository)
+        self.repository = FilesystemRepository(self.settings.task_root, self.config_service)
+        self.task_service = TaskService(self.repository, self.config_service)
+        self.board_service = BoardService(self.repository, self.config_service)
         self.filter_service = FilterService()
 
     def on_mount(self) -> None:
@@ -226,7 +225,7 @@ class KosmosApp(App):
         result = self.board_service.move_task_left(task_filename)
         if result and result.state != task.state:
             screen.refresh_board(focus_task_filename=task_filename)
-            self.notify(f"Moved to {result.state.value.replace('_', ' ')}", timeout=2)
+            self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
 
     def action_move_task_right(self) -> None:
         """Move current task to next column."""
@@ -242,7 +241,7 @@ class KosmosApp(App):
         result = self.board_service.move_task_right(task_filename)
         if result and result.state != task.state:
             screen.refresh_board(focus_task_filename=task_filename)
-            self.notify(f"Moved to {result.state.value.replace('_', ' ')}", timeout=2)
+            self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
 
     def action_move_task_up(self) -> None:
         """Move current task up in column."""
@@ -318,7 +317,7 @@ class KosmosApp(App):
             self.notify("Task deleted", timeout=2)
 
     def action_toggle_state(self) -> None:
-        """Toggle task state: todo -> in_progress -> done -> todo."""
+        """Toggle task state: cycles through columns in order, wrapping at end."""
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -329,20 +328,25 @@ class KosmosApp(App):
 
         task_filename = task.filename
 
-        # Cycle through states
-        state_cycle = {
-            TaskState.TODO: TaskState.IN_PROGRESS,
-            TaskState.IN_PROGRESS: TaskState.DONE,
-            TaskState.DONE: TaskState.TODO,
-        }
+        # Get column order from config
+        config = self.config_service.get_board_config()
+        column_ids = [col.id for col in config.columns]
 
-        new_state = state_cycle.get(task.state, TaskState.TODO)
+        # Find next state (cycle through columns)
+        try:
+            current_idx = column_ids.index(task.state)
+            next_idx = (current_idx + 1) % len(column_ids)
+            new_state = column_ids[next_idx]
+        except ValueError:
+            # Unknown state, move to first column
+            new_state = column_ids[0]
+
         self.board_service.move_task(task_filename, new_state)
 
         # Focus follows task to its new column
         screen.refresh_board(focus_task_filename=task_filename)
 
-        self.notify(f"State: {new_state.value.replace('_', ' ')}", timeout=2)
+        self.notify(f"State: {new_state.replace('_', ' ')}", timeout=2)
 
     # Filter actions
     def action_enter_filter(self) -> None:

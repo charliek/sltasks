@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from .task import (
-    STATE_ARCHIVED,
-    STATE_DONE,
-    STATE_IN_PROGRESS,
-    STATE_TODO,
-    Task,
-)
+from .task import STATE_ARCHIVED, Task
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .sltasks_config import BoardConfig
@@ -123,6 +120,9 @@ class Board(BaseModel):
         # Always have archived column
         board.columns[STATE_ARCHIVED] = []
 
+        # Track unknown states for logging
+        unknown_states: set[str] = set()
+
         # Sort tasks into columns
         for task in tasks:
             if task.state in board.columns:
@@ -131,8 +131,15 @@ class Board(BaseModel):
                 board.columns[STATE_ARCHIVED].append(task)
             else:
                 # Unknown state - place in first column
+                unknown_states.add(task.state)
                 first_col = config.columns[0].id
                 board.columns[first_col].append(task)
+
+        # Log unknown states if any were found
+        if unknown_states:
+            logger.warning(
+                f"Tasks with unknown states placed in first column: {unknown_states}"
+            )
 
         return board
 
@@ -160,23 +167,3 @@ class Board(BaseModel):
             for col in config.columns
         ]
 
-    # Backwards compatibility properties
-    @property
-    def todo(self) -> list[Task]:
-        """Backwards compatibility - get 'todo' column."""
-        return self.columns.get(STATE_TODO, [])
-
-    @property
-    def in_progress(self) -> list[Task]:
-        """Backwards compatibility - get 'in_progress' column."""
-        return self.columns.get(STATE_IN_PROGRESS, [])
-
-    @property
-    def done(self) -> list[Task]:
-        """Backwards compatibility - get 'done' column."""
-        return self.columns.get(STATE_DONE, [])
-
-    @property
-    def archived(self) -> list[Task]:
-        """Backwards compatibility - get 'archived' column."""
-        return self.columns.get(STATE_ARCHIVED, [])

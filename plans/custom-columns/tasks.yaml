@@ -1,0 +1,16 @@
+# Auto-generated - do not edit manually
+version: 1
+columns:
+  todo: []
+  in_progress: []
+  done:
+  - master.md
+  - phase-1-config-model.md
+  - phase-2-task-state-migration.md
+  - phase-3-board-model.md
+  - phase-4-service-layer.md
+  - phase-5-dynamic-ui.md
+  - phase-6-polish.md
+  - phase-7-generate-command.md
+  archived: []
+  code_review: []

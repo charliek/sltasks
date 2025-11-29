@@ -5,7 +5,8 @@ from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
-from ...models import Task, TaskState
+from ...models import Task
+from ...models.sltasks_config import BoardConfig
 from ...services import Filter
 from ..widgets.column import KanbanColumn
 from ..widgets.command_bar import CommandBar
@@ -13,8 +14,6 @@ from ..widgets.command_bar import CommandBar
 
 class BoardScreen(Screen):
     """Main kanban board screen with navigation."""
-
-    COLUMN_STATES = [TaskState.TODO, TaskState.IN_PROGRESS, TaskState.DONE]
 
     # Layers for z-ordering (later = higher)
     LAYERS = ["base", "command"]
@@ -29,27 +28,35 @@ class BoardScreen(Screen):
         self._pending_column = 0
         self._pending_task = 0
 
+    @property
+    def board_config(self) -> BoardConfig:
+        """Get board configuration from app."""
+        return self.app.config_service.get_board_config()
+
+    @property
+    def column_ids(self) -> list[str]:
+        """Get list of visible column IDs in order."""
+        return [col.id for col in self.board_config.columns]
+
+    @property
+    def column_count(self) -> int:
+        """Number of visible columns."""
+        return len(self.column_ids)
+
     def compose(self) -> ComposeResult:
-        """Create the board layout."""
+        """Create the board layout with dynamic columns from config."""
         yield Header()
 
         with Container(id="board-container"):
             with Horizontal(id="columns"):
-                yield KanbanColumn(
-                    title="To Do",
-                    state=TaskState.TODO,
-                    id="column-todo",
-                )
-                yield KanbanColumn(
-                    title="In Progress",
-                    state=TaskState.IN_PROGRESS,
-                    id="column-in-progress",
-                )
-                yield KanbanColumn(
-                    title="Done",
-                    state=TaskState.DONE,
-                    id="column-done",
-                )
+                for col in self.board_config.columns:
+                    # Generate CSS-safe ID (replace underscores with hyphens)
+                    col_id = f"column-{col.id.replace('_', '-')}"
+                    yield KanbanColumn(
+                        title=col.title,
+                        state=col.id,
+                        id=col_id,
+                    )
 
         yield Static("", id="filter-status", classes="filter-status-bar")
         yield CommandBar()
@@ -74,18 +81,18 @@ class BoardScreen(Screen):
         """Load tasks from the board service and populate columns."""
         board = self.app.board_service.load_board()
 
-        # Populate each column
-        for state, tasks in board.visible_columns:
+        # Populate each column using config
+        for col_id, _title, tasks in board.get_visible_columns(self.board_config):
             # Apply filter if active
             if self._filter:
                 tasks = self.app.filter_service.apply(tasks, self._filter)
 
-            column_id = f"column-{state.value.replace('_', '-')}"
+            widget_id = f"column-{col_id.replace('_', '-')}"
             try:
-                column = self.query_one(f"#{column_id}", KanbanColumn)
+                column = self.query_one(f"#{widget_id}", KanbanColumn)
                 column.set_tasks(tasks)
             except Exception as e:
-                self.log.error(f"Failed to load column {column_id}: {e}")
+                self.log.error(f"Failed to load column {widget_id}: {e}")
 
     def refresh_board(self, focus_task_filename: str | None = None) -> None:
         """
@@ -126,8 +133,10 @@ class BoardScreen(Screen):
         Returns:
             (column_index, task_index) or None if not found
         """
-        for col_idx in range(len(self.COLUMN_STATES)):
+        for col_idx in range(self.column_count):
             column = self._get_column(col_idx)
+            if column is None:
+                continue
             for task_idx, task in enumerate(column.tasks):
                 if task.filename == filename:
                     return (col_idx, task_idx)
@@ -144,9 +153,9 @@ class BoardScreen(Screen):
                 return
 
         # Fallback: restore previous position (clamped to valid range)
-        self._current_column = self._pending_column
+        self._current_column = min(self._pending_column, self.column_count - 1)
         column = self._get_column(self._current_column)
-        if column.task_count > 0:
+        if column and column.task_count > 0:
             self._current_task = min(self._pending_task, column.task_count - 1)
         else:
             self._current_task = 0
@@ -158,13 +167,13 @@ class BoardScreen(Screen):
         new_column = self._current_column + delta
 
         # Clamp to valid range
-        new_column = max(0, min(new_column, len(self.COLUMN_STATES) - 1))
+        new_column = max(0, min(new_column, self.column_count - 1))
 
         if new_column != self._current_column:
             self._current_column = new_column
             # Clamp task index to new column's task count
             column = self._get_column(new_column)
-            if column.task_count > 0:
+            if column and column.task_count > 0:
                 self._current_task = min(self._current_task, column.task_count - 1)
             else:
                 self._current_task = 0
@@ -173,7 +182,7 @@ class BoardScreen(Screen):
     def navigate_task(self, delta: int) -> None:
         """Navigate between tasks in current column."""
         column = self._get_column(self._current_column)
-        if column.task_count == 0:
+        if column is None or column.task_count == 0:
             return
 
         new_task = self._current_task + delta
@@ -186,7 +195,7 @@ class BoardScreen(Screen):
     def navigate_to_task(self, index: int) -> None:
         """Navigate to specific task index (-1 for last)."""
         column = self._get_column(self._current_column)
-        if column.task_count == 0:
+        if column is None or column.task_count == 0:
             return
 
         if index < 0:
@@ -197,21 +206,29 @@ class BoardScreen(Screen):
         self._current_task = index
         self._update_focus()
 
-    def _get_column(self, index: int) -> KanbanColumn:
+    def _get_column(self, index: int) -> KanbanColumn | None:
         """Get column widget by index."""
-        state = self.COLUMN_STATES[index]
-        column_id = f"column-{state.value.replace('_', '-')}"
-        return self.query_one(f"#{column_id}", KanbanColumn)
+        if index < 0 or index >= self.column_count:
+            return None
+        col_id = self.column_ids[index]
+        widget_id = f"column-{col_id.replace('_', '-')}"
+        try:
+            return self.query_one(f"#{widget_id}", KanbanColumn)
+        except Exception:
+            return None
 
     def _update_focus(self) -> None:
         """Update focus to current task."""
         column = self._get_column(self._current_column)
-        column.focus_task(self._current_task)
+        if column:
+            column.focus_task(self._current_task)
 
     def get_current_task(self) -> Task | None:
         """Get the currently focused task."""
         column = self._get_column(self._current_column)
-        return column.get_task(self._current_task)
+        if column:
+            return column.get_task(self._current_task)
+        return None
 
     @property
     def current_column_index(self) -> int:
@@ -224,9 +241,11 @@ class BoardScreen(Screen):
         return self._current_task
 
     @property
-    def current_column_state(self) -> TaskState:
+    def current_column_state(self) -> str:
         """Get the state of the current column."""
-        return self.COLUMN_STATES[self._current_column]
+        if 0 <= self._current_column < self.column_count:
+            return self.column_ids[self._current_column]
+        return self.column_ids[0] if self.column_ids else "todo"
 
     def _update_filter_status(self, expression: str) -> None:
         """Update the filter status bar."""

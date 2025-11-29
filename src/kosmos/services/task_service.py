@@ -1,25 +1,43 @@
 """Service for task CRUD operations."""
 
+from __future__ import annotations
+
 import os
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..models import Priority, Task
-from ..models.task import STATE_TODO
+from ..models.sltasks_config import BoardConfig
 from ..repositories import FilesystemRepository
 from ..utils import generate_filename, now_utc
+
+if TYPE_CHECKING:
+    from .config_service import ConfigService
 
 
 class TaskService:
     """Service for task CRUD operations."""
 
-    def __init__(self, repository: FilesystemRepository) -> None:
+    def __init__(
+        self,
+        repository: FilesystemRepository,
+        config_service: ConfigService | None = None,
+    ) -> None:
         self.repository = repository
+        self._config_service = config_service
+
+    def _get_default_state(self) -> str:
+        """Get the default state for new tasks (first column)."""
+        if self._config_service:
+            config = self._config_service.get_board_config()
+            return config.columns[0].id
+        return "todo"
 
     def create_task(
         self,
         title: str,
-        state: str = STATE_TODO,
+        state: str | None = None,
         priority: Priority = Priority.MEDIUM,
         tags: list[str] | None = None,
     ) -> Task:
@@ -27,7 +45,11 @@ class TaskService:
         Create a new task with the given title.
 
         Generates a filename from the title and creates the file.
+        If state is not provided, uses first column from config.
         """
+        if state is None:
+            state = self._get_default_state()
+
         filename = generate_filename(title)
 
         # Handle filename collision

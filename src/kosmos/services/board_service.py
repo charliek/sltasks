@@ -88,6 +88,16 @@ class BoardService:
         """Move a task to the archived state."""
         return self.move_task(filename, STATE_ARCHIVED)
 
+    def unarchive_task(self, filename: str) -> Task | None:
+        """Move an archived task to the first column."""
+        task = self.repository.get_by_id(filename)
+        if task is None or task.state != STATE_ARCHIVED:
+            return None
+
+        config = self._get_board_config()
+        first_column = config.columns[0].id
+        return self.move_task(filename, first_column)
+
     def get_board_order(self) -> BoardOrder:
         """Get the current board order."""
         return self.repository.get_board_order()

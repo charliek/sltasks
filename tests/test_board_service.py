@@ -56,12 +56,12 @@ class TestBoardServiceLoad:
 
         board = board_service.load_board()
 
-        assert len(board.todo) == 1
-        assert len(board.in_progress) == 1
-        assert len(board.done) == 1
-        assert len(board.archived) == 1
-        assert board.todo[0].filename == "task1.md"
-        assert board.in_progress[0].filename == "task2.md"
+        assert len(board.get_column(STATE_TODO)) == 1
+        assert len(board.get_column(STATE_IN_PROGRESS)) == 1
+        assert len(board.get_column(STATE_DONE)) == 1
+        assert len(board.get_column(STATE_ARCHIVED)) == 1
+        assert board.get_column(STATE_TODO)[0].filename == "task1.md"
+        assert board.get_column(STATE_IN_PROGRESS)[0].filename == "task2.md"
 
 
 class TestBoardServiceMoveTask:

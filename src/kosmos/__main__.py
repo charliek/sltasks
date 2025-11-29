@@ -19,6 +19,11 @@ def parse_args() -> argparse.Namespace:
         help="Path to tasks directory (default: .tasks/)",
     )
     parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="Generate default sltasks.yml config in task directory and exit",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 0.1.0",
@@ -36,6 +41,13 @@ def main() -> None:
         settings_kwargs["task_root"] = args.task_root
 
     settings = Settings(**settings_kwargs)
+
+    # Handle --generate command
+    if args.generate:
+        from .cli.generate import run_generate
+
+        exit_code = run_generate(settings.task_root)
+        raise SystemExit(exit_code)
 
     # Import here to avoid circular imports
     from .app import run

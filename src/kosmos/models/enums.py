@@ -1,15 +1,6 @@
-"""Enums for task state and priority."""
+"""Enums for task priority."""
 
 from enum import Enum
-
-
-class TaskState(str, Enum):
-    """Valid states for a task."""
-
-    TODO = "todo"
-    IN_PROGRESS = "in_progress"
-    DONE = "done"
-    ARCHIVED = "archived"
 
 
 class Priority(str, Enum):

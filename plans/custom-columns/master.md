@@ -1,3 +1,9 @@
+---
+state: done
+priority: medium
+updated: '2025-11-29T19:29:52.448069+00:00'
+---
+
 # Custom Board Columns - Implementation Plans
 
 ## Feature Overview
@@ -99,9 +105,10 @@ Validation moves from compile-time (enum) to runtime (config-based).
 | 1 | [Config Model & Service](./phase-1-config-model.md) | Low | **Complete** |
 | 2 | [Task State Migration](./phase-2-task-state-migration.md) | Medium | **Complete** |
 | 3 | [Board Model Refactor](./phase-3-board-model.md) | Medium | **Complete** |
-| 4 | [Service Layer Updates](./phase-4-service-layer.md) | Medium | Pending |
-| 5 | [Dynamic UI Generation](./phase-5-dynamic-ui.md) | High | Pending |
-| 6 | [Polish & Edge Cases](./phase-6-polish.md) | Low | Pending |
+| 4 | [Service Layer Updates](./phase-4-service-layer.md) | Medium | **Complete** |
+| 5 | [Dynamic UI Generation](./phase-5-dynamic-ui.md) | High | **Complete** |
+| 6 | [Polish & Edge Cases](./phase-6-polish.md) | Low | **Complete** |
+| 7 | [Generate Config Command](./phase-7-generate-command.md) | Low | **Complete** |
 
 ### Phase Summary
 
@@ -111,6 +118,7 @@ Validation moves from compile-time (enum) to runtime (config-based).
 - **Phase 4**: Update `BoardService` navigation and `FilterService` for string states.
 - **Phase 5**: Generate UI columns dynamically from config. Most user-visible change.
 - **Phase 6**: Error handling, edge cases, documentation, comprehensive tests.
+- **Phase 7**: Add `--generate` CLI command to create default `sltasks.yml` config file.
 
 ## Files Overview
 
@@ -119,19 +127,23 @@ Validation moves from compile-time (enum) to runtime (config-based).
 |------|---------|
 | `models/sltasks_config.py` | `SltasksConfig`, `BoardConfig`, `ColumnConfig` models |
 | `services/config_service.py` | Load/cache `sltasks.yml` configuration |
+| `cli/__init__.py` | CLI module exports |
+| `cli/generate.py` | `--generate` command implementation |
+| `cli/output.py` | Colorful terminal output helpers |
 
 ### Modified Files
 | File | Phase | Changes |
 |------|-------|---------|
 | `models/task.py` | 2 | `state: TaskState` → `state: str` |
-| `models/board.py` | 3 | Fixed columns → `dict[str, list[Task]]` |
-| `models/enums.py` | 2 | Keep for backwards compat |
+| `models/board.py` | 3, 6 | Fixed columns → `dict[str, list[Task]]`, remove compat properties |
+| `models/enums.py` | 6 | Remove `TaskState` enum |
 | `services/board_service.py` | 4 | Use config for column navigation |
 | `services/filter_service.py` | 4 | String-based state filtering |
 | `repositories/filesystem.py` | 3 | Dynamic column ordering |
 | `ui/screens/board.py` | 5 | Generate columns from config |
 | `ui/widgets/column.py` | 5 | Accept string state |
-| `app.py` | 5 | Initialize ConfigService |
+| `app.py` | 4, 5 | Wire ConfigService to all services |
+| `__main__.py` | 7 | Add `--generate` argument |
 
 ## Constraints
 

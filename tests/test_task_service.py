@@ -3,7 +3,8 @@
 import pytest
 from pathlib import Path
 
-from kosmos.models import Task, TaskState, Priority
+from kosmos.models import Task, Priority
+from kosmos.models.task import STATE_TODO, STATE_IN_PROGRESS
 from kosmos.repositories import FilesystemRepository
 from kosmos.services import TaskService
 
@@ -37,7 +38,7 @@ class TestTaskServiceCreate:
 
         assert task.filename == "my-new-task.md"
         assert task.title == "My New Task"
-        assert task.state == TaskState.TODO
+        assert task.state == STATE_TODO
         assert task.priority == Priority.MEDIUM
         assert task.created is not None
         assert task.updated is not None
@@ -47,11 +48,11 @@ class TestTaskServiceCreate:
         """create_task respects state parameter."""
         task = task_service.create_task(
             "In Progress Task",
-            state=TaskState.IN_PROGRESS,
+            state=STATE_IN_PROGRESS,
             priority=Priority.HIGH,
         )
 
-        assert task.state == TaskState.IN_PROGRESS
+        assert task.state == STATE_IN_PROGRESS
         assert task.priority == Priority.HIGH
 
     def test_create_task_unique_filename_collision(self, task_service: TaskService):

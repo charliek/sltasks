@@ -2,7 +2,14 @@
 
 import pytest
 
-from kosmos.models import Priority, Task, TaskState
+from kosmos.models import (
+    Priority,
+    Task,
+    STATE_TODO,
+    STATE_IN_PROGRESS,
+    STATE_DONE,
+    STATE_ARCHIVED,
+)
 from kosmos.services import Filter, FilterService
 
 
@@ -56,17 +63,17 @@ class TestFilterParsing:
     def test_state_filter(self, filter_service: FilterService):
         """state:value is parsed correctly."""
         f = filter_service.parse("state:in_progress")
-        assert f.states == [TaskState.IN_PROGRESS]
+        assert f.states == ["in_progress"]
 
     def test_multiple_states(self, filter_service: FilterService):
         """Multiple state: expressions are collected."""
         f = filter_service.parse("state:todo state:in_progress")
-        assert f.states == [TaskState.TODO, TaskState.IN_PROGRESS]
+        assert f.states == ["todo", "in_progress"]
 
-    def test_invalid_state_ignored(self, filter_service: FilterService):
-        """Invalid state values are ignored."""
-        f = filter_service.parse("state:invalid state:todo")
-        assert f.states == [TaskState.TODO]
+    def test_custom_state_accepted(self, filter_service: FilterService):
+        """Custom state values are accepted (for custom columns)."""
+        f = filter_service.parse("state:review state:todo")
+        assert f.states == ["review", "todo"]
 
     def test_priority_filter(self, filter_service: FilterService):
         """priority:value is parsed correctly."""
@@ -100,14 +107,14 @@ class TestFilterParsing:
         assert f.tags == ["bug"]
         assert f.exclude_tags == ["wontfix"]
         assert f.priorities == [Priority.HIGH]
-        assert f.states == [TaskState.TODO]
+        assert f.states == ["todo"]
 
     def test_case_insensitive_values(self, filter_service: FilterService):
         """Values are lowercased for matching."""
         f = filter_service.parse("tag:BUG priority:HIGH state:TODO")
         assert f.tags == ["bug"]
         assert f.priorities == [Priority.HIGH]
-        assert f.states == [TaskState.TODO]
+        assert f.states == ["todo"]
 
 
 class TestFilterApplication:
@@ -120,7 +127,7 @@ class TestFilterApplication:
             Task(
                 filename="bug1.md",
                 title="Login Bug",
-                state=TaskState.TODO,
+                state=STATE_TODO,
                 priority=Priority.HIGH,
                 tags=["bug", "auth"],
                 body="Users can't login",
@@ -128,7 +135,7 @@ class TestFilterApplication:
             Task(
                 filename="feature1.md",
                 title="Add Dark Mode",
-                state=TaskState.IN_PROGRESS,
+                state=STATE_IN_PROGRESS,
                 priority=Priority.MEDIUM,
                 tags=["feature", "ui"],
                 body="Implement dark theme",
@@ -136,7 +143,7 @@ class TestFilterApplication:
             Task(
                 filename="bug2.md",
                 title="Crash on Startup",
-                state=TaskState.TODO,
+                state=STATE_TODO,
                 priority=Priority.CRITICAL,
                 tags=["bug", "critical"],
                 body="App crashes immediately",
@@ -144,7 +151,7 @@ class TestFilterApplication:
             Task(
                 filename="done1.md",
                 title="Setup CI",
-                state=TaskState.DONE,
+                state=STATE_DONE,
                 priority=Priority.LOW,
                 tags=["devops"],
                 body="Configure GitHub Actions",
@@ -152,7 +159,7 @@ class TestFilterApplication:
             Task(
                 filename="archived1.md",
                 title="Old Feature",
-                state=TaskState.ARCHIVED,
+                state=STATE_ARCHIVED,
                 priority=Priority.MEDIUM,
                 tags=["feature"],
                 body="Deprecated feature",
@@ -166,7 +173,7 @@ class TestFilterApplication:
         f = Filter()
         result = filter_service.apply(sample_tasks, f)
         assert len(result) == 4
-        assert all(t.state != TaskState.ARCHIVED for t in result)
+        assert all(t.state != STATE_ARCHIVED for t in result)
 
     def test_show_archived(
         self, filter_service: FilterService, sample_tasks: list[Task]
@@ -235,16 +242,16 @@ class TestFilterApplication:
         self, filter_service: FilterService, sample_tasks: list[Task]
     ):
         """State filter matches tasks in that state."""
-        f = Filter(states=[TaskState.TODO])
+        f = Filter(states=[STATE_TODO])
         result = filter_service.apply(sample_tasks, f)
         assert len(result) == 2
-        assert all(t.state == TaskState.TODO for t in result)
+        assert all(t.state == STATE_TODO for t in result)
 
     def test_multiple_states_any_match(
         self, filter_service: FilterService, sample_tasks: list[Task]
     ):
         """Multiple states match if ANY state matches."""
-        f = Filter(states=[TaskState.TODO, TaskState.DONE])
+        f = Filter(states=[STATE_TODO, STATE_DONE])
         result = filter_service.apply(sample_tasks, f)
         assert len(result) == 3
 
@@ -261,7 +268,7 @@ class TestFilterApplication:
         self, filter_service: FilterService, sample_tasks: list[Task]
     ):
         """Multiple filter types are ANDed together."""
-        f = Filter(tags=["bug"], states=[TaskState.TODO], priorities=[Priority.CRITICAL])
+        f = Filter(tags=["bug"], states=[STATE_TODO], priorities=[Priority.CRITICAL])
         result = filter_service.apply(sample_tasks, f)
         assert len(result) == 1
         assert result[0].filename == "bug2.md"

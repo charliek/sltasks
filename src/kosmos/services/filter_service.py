@@ -3,7 +3,8 @@
 import re
 from dataclasses import dataclass, field
 
-from ..models import Priority, Task, TaskState
+from ..models import Priority, Task
+from ..models.task import STATE_ARCHIVED
 
 
 @dataclass
@@ -13,7 +14,7 @@ class Filter:
     text: str | None = None  # Free text search
     tags: list[str] = field(default_factory=list)  # tag:value
     exclude_tags: list[str] = field(default_factory=list)  # -tag:value
-    states: list[TaskState] = field(default_factory=list)  # state:value
+    states: list[str] = field(default_factory=list)  # state:value (any string)
     priorities: list[Priority] = field(default_factory=list)  # priority:value
     show_archived: bool = False  # archived:true
 
@@ -58,10 +59,8 @@ class FilterService:
                     f.tags.append(value)
 
             elif key == "state":
-                try:
-                    f.states.append(TaskState(value))
-                except ValueError:
-                    pass  # Invalid state, ignore
+                # Accept any state string (no validation - custom states allowed)
+                f.states.append(value)
 
             elif key == "priority":
                 try:
@@ -90,7 +89,7 @@ class FilterService:
     def _matches(self, task: Task, f: Filter) -> bool:
         """Check if a task matches the filter."""
         # Hide archived by default unless explicitly requested
-        if task.state == TaskState.ARCHIVED and not f.show_archived:
+        if task.state == STATE_ARCHIVED and not f.show_archived:
             return False
 
         # Text search (case-insensitive)

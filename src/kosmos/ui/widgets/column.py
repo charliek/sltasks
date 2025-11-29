@@ -6,7 +6,7 @@ from textual.containers import VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Static
 
-from ...models import Task, TaskState
+from ...models import Task
 from .task_card import TaskCard
 
 
@@ -54,7 +54,7 @@ class KanbanColumn(Widget):
     def __init__(
         self,
         title: str,
-        state: TaskState,
+        state: str,
         *args,
         **kwargs,
     ) -> None:
@@ -63,10 +63,15 @@ class KanbanColumn(Widget):
         self.state = state
         self._tasks: list[Task] = []
 
+    @property
+    def _state_css_id(self) -> str:
+        """Get CSS-safe version of state for IDs."""
+        return self.state.replace("_", "-")
+
     def compose(self) -> ComposeResult:
         """Create column layout."""
-        yield Static(self._header_text, classes="column-header", id=f"header-{self.state.value}")
-        yield TaskListScroll(classes="column-content", id=f"content-{self.state.value}")
+        yield Static(self._header_text, classes="column-header", id=f"header-{self._state_css_id}")
+        yield TaskListScroll(classes="column-content", id=f"content-{self._state_css_id}")
 
     def on_mount(self) -> None:
         """Refresh tasks when column is mounted."""
@@ -87,7 +92,7 @@ class KanbanColumn(Widget):
 
     async def _refresh_tasks(self) -> None:
         """Refresh the task cards in this column."""
-        content_id = f"#content-{self.state.value}"
+        content_id = f"#content-{self._state_css_id}"
         try:
             content = self.query_one(content_id, TaskListScroll)
         except Exception as e:
@@ -99,7 +104,7 @@ class KanbanColumn(Widget):
 
         # Show empty state or task cards
         if not self._tasks:
-            state_name = self.state.value.replace("_", " ")
+            state_name = self.state.replace("_", " ")
             await content.mount(EmptyColumnMessage(f"No {state_name} tasks"))
         else:
             for task in self._tasks:
@@ -110,7 +115,7 @@ class KanbanColumn(Widget):
 
         # Update header count
         try:
-            header = self.query_one(f"#header-{self.state.value}", Static)
+            header = self.query_one(f"#header-{self._state_css_id}", Static)
             header.update(self._header_text)
         except Exception:
             pass
