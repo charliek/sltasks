@@ -1,5 +1,6 @@
 """Kanban column widget."""
 
+from textual.actions import SkipAction
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widget import Widget
@@ -7,6 +8,38 @@ from textual.widgets import Static
 
 from ...models import Task, TaskState
 from .task_card import TaskCard
+
+
+class TaskListScroll(VerticalScroll):
+    """Scroll container for task lists.
+
+    Raises SkipAction for navigation keys so they bubble up to the App
+    for task navigation instead of being handled as scroll actions.
+    """
+
+    def action_scroll_up(self) -> None:
+        """Skip scroll_up action to allow key to bubble."""
+        raise SkipAction()
+
+    def action_scroll_down(self) -> None:
+        """Skip scroll_down action to allow key to bubble."""
+        raise SkipAction()
+
+    def action_scroll_home(self) -> None:
+        """Skip scroll_home action to allow key to bubble."""
+        raise SkipAction()
+
+    def action_scroll_end(self) -> None:
+        """Skip scroll_end action to allow key to bubble."""
+        raise SkipAction()
+
+    def action_page_up(self) -> None:
+        """Skip page_up action to allow key to bubble."""
+        raise SkipAction()
+
+    def action_page_down(self) -> None:
+        """Skip page_down action to allow key to bubble."""
+        raise SkipAction()
 
 
 class EmptyColumnMessage(Static):
@@ -33,7 +66,7 @@ class KanbanColumn(Widget):
     def compose(self) -> ComposeResult:
         """Create column layout."""
         yield Static(self._header_text, classes="column-header", id=f"header-{self.state.value}")
-        yield VerticalScroll(classes="column-content", id=f"content-{self.state.value}")
+        yield TaskListScroll(classes="column-content", id=f"content-{self.state.value}")
 
     def on_mount(self) -> None:
         """Refresh tasks when column is mounted."""
@@ -56,7 +89,7 @@ class KanbanColumn(Widget):
         """Refresh the task cards in this column."""
         content_id = f"#content-{self.state.value}"
         try:
-            content = self.query_one(content_id, VerticalScroll)
+            content = self.query_one(content_id, TaskListScroll)
         except Exception as e:
             self.log.error(f"Cannot find {content_id}: {e}")
             return
@@ -110,6 +143,7 @@ class KanbanColumn(Widget):
         try:
             card = self.query_one(f"#task-{task_id}", TaskCard)
             card.focus()
+            card.scroll_visible()
             return True
         except Exception:
             return False
