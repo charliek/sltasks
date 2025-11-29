@@ -8,7 +8,7 @@ from .models import TaskState
 from .repositories import FilesystemRepository
 from .services import BoardService, FilterService, TaskService
 from .ui.screens.board import BoardScreen
-from .ui.widgets import ConfirmModal
+from .ui.widgets import CommandBar, ConfirmModal
 
 
 class KosmosApp(App):
@@ -53,6 +53,9 @@ class KosmosApp(App):
         Binding("a", "archive_task", "Archive", show=True),
         Binding("d", "delete_task", "Delete", show=False),
         Binding("space", "toggle_state", "Toggle", show=False),
+        # Filter mode
+        Binding("/", "enter_filter", "Filter", show=True),
+        Binding("escape", "escape", "Back", show=False, priority=True),
     ]
 
     SCREENS = {
@@ -293,6 +296,55 @@ class KosmosApp(App):
         self.board_service.move_task(task.filename, new_state)
         screen.refresh_board()
         self.notify(f"State: {new_state.value.replace('_', ' ')}", timeout=2)
+
+    # Filter actions
+    def action_enter_filter(self) -> None:
+        """Enter filter mode."""
+        screen = self.screen
+        if not isinstance(screen, BoardScreen):
+            return
+        command_bar = screen.query_one(CommandBar)
+        command_bar.enter_filter_mode()
+
+    def action_escape(self) -> None:
+        """Handle escape: exit filter mode or clear filter."""
+        screen = self.screen
+        if not isinstance(screen, BoardScreen):
+            return
+
+        command_bar = screen.query_one(CommandBar)
+        if command_bar.is_visible:
+            # Exit filter input mode
+            command_bar.exit_filter_mode()
+        elif command_bar.active_filter:
+            # Clear the active filter
+            command_bar.clear_filter()
+            self._apply_filter("")
+
+    def on_input_submitted(self, event) -> None:
+        """Handle filter input submission."""
+        if event.input.id == "filter-input":
+            screen = self.screen
+            if isinstance(screen, BoardScreen):
+                command_bar = screen.query_one(CommandBar)
+                command_bar.apply_filter(event.value)
+                command_bar.exit_filter_mode()
+                self._apply_filter(event.value)
+
+    def _apply_filter(self, expression: str) -> None:
+        """Apply filter to the board."""
+        screen = self.screen
+        if not isinstance(screen, BoardScreen):
+            return
+
+        if expression.strip():
+            filter_ = self.filter_service.parse(expression)
+            screen.set_filter(filter_, expression)
+        else:
+            screen.set_filter(None, "")
+
+        screen.load_tasks()
+        screen._update_focus()
 
 
 def run(settings: Settings | None = None) -> None:

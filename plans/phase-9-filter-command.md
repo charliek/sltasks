@@ -15,27 +15,27 @@ This phase adds a filter/command bar that allows users to filter tasks by text, 
 
 ## Task Checklist
 
-- [ ] Create `CommandBar` widget:
-  - [ ] Text input for filter expression
-  - [ ] Mode indicator (filter, command, etc.)
-  - [ ] Active filter display
-- [ ] Implement filter mode in `KosmosApp`:
-  - [ ] `/` - Enter filter mode
-  - [ ] `Escape` - Exit filter mode / clear filter
-  - [ ] `Enter` - Apply filter
-- [ ] Update `BoardScreen` to support filtering:
-  - [ ] `set_filter(Filter)` method
-  - [ ] Apply filter when loading tasks
-  - [ ] Show filtered task counts in headers
-- [ ] Add filter status display:
-  - [ ] Show active filter expression
-  - [ ] Show filtered vs total task counts
-- [ ] Handle empty filter results:
-  - [ ] Show "No matching tasks" in empty columns
-- [ ] Add filter autocomplete (optional):
-  - [ ] Suggest tag: completions
-  - [ ] Suggest state: completions
-  - [ ] Suggest priority: completions
+- [x] Create `CommandBar` widget:
+  - [x] Text input for filter expression
+  - [x] Mode indicator (filter, command, etc.)
+  - [x] Active filter display
+- [x] Implement filter mode in `KosmosApp`:
+  - [x] `/` - Enter filter mode
+  - [x] `Escape` - Exit filter mode / clear filter
+  - [x] `Enter` - Apply filter
+- [x] Update `BoardScreen` to support filtering:
+  - [x] `set_filter(Filter)` method
+  - [x] Apply filter when loading tasks
+  - [-] Show filtered task counts in headers (deferred)
+- [x] Add filter status display:
+  - [x] Show active filter expression
+  - [-] Show filtered vs total task counts (deferred)
+- [x] Handle empty filter results:
+  - [x] Show "No matching tasks" in empty columns (uses existing EmptyColumnMessage)
+- [-] Add filter autocomplete (optional):
+  - [-] Suggest tag: completions (deferred)
+  - [-] Suggest state: completions (deferred)
+  - [-] Suggest priority: completions (deferred)
 
 ## Detailed Specifications
 
@@ -264,11 +264,12 @@ Manual testing scenarios:
 
 ## Deviations from Plan
 
-_This section will be updated if implementation differs from the plan._
-
 | Date | Deviation | Reason |
 |------|-----------|--------|
-| - | - | - |
+| 2025-11-28 | CommandBar hidden by default, shown on `/` | Cleaner UI when not filtering |
+| 2025-11-28 | Filter status bar added to BoardScreen | Shows active filter persistently |
+| 2025-11-28 | Deferred filtered/total counts in headers | Complexity vs value tradeoff |
+| 2025-11-28 | Deferred autocomplete | Can add in future enhancement |
 
 ## Key Notes
 

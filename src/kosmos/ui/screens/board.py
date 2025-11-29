@@ -3,10 +3,12 @@
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
-from textual.widgets import Footer, Header
+from textual.widgets import Footer, Header, Static
 
 from ...models import Task, TaskState
+from ...services import Filter
 from ..widgets.column import KanbanColumn
+from ..widgets.command_bar import CommandBar
 
 
 class BoardScreen(Screen):
@@ -14,10 +16,14 @@ class BoardScreen(Screen):
 
     COLUMN_STATES = [TaskState.TODO, TaskState.IN_PROGRESS, TaskState.DONE]
 
+    # Layers for z-ordering (later = higher)
+    LAYERS = ["base", "command"]
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._current_column = 0
         self._current_task = 0
+        self._filter: Filter | None = None
 
     def compose(self) -> ComposeResult:
         """Create the board layout."""
@@ -41,6 +47,8 @@ class BoardScreen(Screen):
                     id="column-done",
                 )
 
+        yield Static("", id="filter-status", classes="filter-status-bar")
+        yield CommandBar()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -53,12 +61,21 @@ class BoardScreen(Screen):
         """Set initial focus after mount."""
         self._update_focus()
 
+    def set_filter(self, filter_: Filter | None, expression: str = "") -> None:
+        """Set the active filter."""
+        self._filter = filter_
+        self._update_filter_status(expression)
+
     def load_tasks(self) -> None:
         """Load tasks from the board service and populate columns."""
         board = self.app.board_service.load_board()
 
         # Populate each column
         for state, tasks in board.visible_columns:
+            # Apply filter if active
+            if self._filter:
+                tasks = self.app.filter_service.apply(tasks, self._filter)
+
             column_id = f"column-{state.value.replace('_', '-')}"
             try:
                 column = self.query_one(f"#{column_id}", KanbanColumn)
@@ -160,3 +177,16 @@ class BoardScreen(Screen):
     def current_column_state(self) -> TaskState:
         """Get the state of the current column."""
         return self.COLUMN_STATES[self._current_column]
+
+    def _update_filter_status(self, expression: str) -> None:
+        """Update the filter status bar."""
+        try:
+            status = self.query_one("#filter-status", Static)
+            if expression.strip():
+                status.update(f"[dim]Filter:[/] {expression} [dim](Esc to clear)[/]")
+                status.display = True
+            else:
+                status.update("")
+                status.display = False
+        except Exception:
+            pass
