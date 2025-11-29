@@ -46,34 +46,63 @@ KanbanColumn:last-of-type {
     padding: 1;
 }
 
+/* Empty column state */
+EmptyColumnMessage {
+    text-align: center;
+    color: $text-muted;
+    padding: 2;
+    text-style: italic;
+    width: 100%;
+}
+
 /* Task card styles */
 TaskCard {
     height: auto;
     min-height: 3;
+    max-height: 8;
     margin-bottom: 1;
     padding: 0 1;
     background: $surface;
-    border: solid $primary-darken-2;
+    border: solid $primary-darken-3;
 }
 
 TaskCard:hover {
     background: $surface-lighten-1;
+    border: solid $primary-darken-1;
 }
 
 TaskCard:focus {
-    background: $primary-darken-1;
-    border: solid $primary;
+    background: $primary-darken-2;
+    border: double $primary;
 }
 
 .task-title {
     text-style: bold;
+    width: 100%;
 }
 
-.task-meta {
+.task-priority {
+    height: 1;
+}
+
+.task-tags {
+    height: 1;
     color: $text-muted;
 }
 
-/* Priority colors */
+.task-preview {
+    height: 1;
+    color: $text-muted;
+    text-style: italic;
+}
+
+/* Focus state for task title */
+TaskCard:focus .task-title {
+    color: $text;
+    text-style: bold;
+}
+
+/* Priority colors - used for standalone priority widgets */
 .priority-critical {
     color: $error;
 }

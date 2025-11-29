@@ -9,6 +9,12 @@ from ...models import Task, TaskState
 from .task_card import TaskCard
 
 
+class EmptyColumnMessage(Static):
+    """Displayed when a column has no tasks."""
+
+    pass
+
+
 class KanbanColumn(Widget):
     """A single column in the kanban board."""
 
@@ -31,8 +37,9 @@ class KanbanColumn(Widget):
 
     @property
     def _header_text(self) -> str:
-        """Header text with task count."""
-        return f"{self.title} ({len(self._tasks)})"
+        """Header text with styled task count."""
+        count = len(self._tasks)
+        return f"{self.title} [dim]({count})[/]"
 
     def set_tasks(self, tasks: list[Task]) -> None:
         """Set the tasks for this column."""
@@ -49,9 +56,13 @@ class KanbanColumn(Widget):
         # Remove existing task cards
         content.remove_children()
 
-        # Add new task cards
-        for task in self._tasks:
-            content.mount(TaskCard(task, id=f"task-{task.filename}"))
+        # Show empty state or task cards
+        if not self._tasks:
+            state_name = self.state.value.replace("_", " ")
+            content.mount(EmptyColumnMessage(f"No {state_name} tasks"))
+        else:
+            for task in self._tasks:
+                content.mount(TaskCard(task, id=f"task-{task.filename}"))
 
         # Update header count
         try:

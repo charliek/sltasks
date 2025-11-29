@@ -120,9 +120,9 @@ kosmos/
 | 3 | [Repository Layer](./phase-3-repository.md) | **Complete** |
 | 4 | [Service Layer](./phase-4-services.md) | **Complete** |
 | 5 | [Basic TUI](./phase-5-basic-tui.md) | **Complete** |
-| 6 | Task Cards | Planned (docs later) |
-| 7 | Navigation | Planned (docs later) |
-| 8 | Actions | Planned (docs later) |
+| 6 | [Task Cards Enhancement](./phase-6-task-cards.md) | **Complete** |
+| 7 | [Keyboard Navigation](./phase-7-navigation.md) | Planned |
+| 8 | [Task Actions](./phase-8-actions.md) | Planned |
 | 9 | Filter/Command | Planned (docs later) |
 | 10 | Help Screen | Planned (docs later) |
 | 11 | Polish | Planned (docs later) |
