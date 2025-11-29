@@ -125,7 +125,8 @@ kosmos/
 | 8 | [Task Actions](./phase-8-actions.md) | Planned |
 | 9 | [Filter & Command Bar](./phase-9-filter-command.md) | Planned |
 | 10 | [Help Screen](./phase-10-help-screen.md) | Planned |
-| 11 | Polish | Planned (docs later) |
+| 11 | [Task Preview Modal](./phase-11-task-preview.md) | Planned |
+| 12 | Polish | Planned (docs later) |
 
 ## Design Decisions
 

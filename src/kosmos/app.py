@@ -2,13 +2,14 @@
 
 from textual.app import App
 from textual.binding import Binding
+from textual.screen import ModalScreen
 
 from .config import Settings
 from .models import TaskState
 from .repositories import FilesystemRepository
 from .services import BoardService, FilterService, TaskService
 from .ui.screens.board import BoardScreen
-from .ui.widgets import CommandBar, ConfirmModal, HelpScreen
+from .ui.widgets import CommandBar, ConfirmModal, HelpScreen, TaskPreviewModal
 
 
 class KosmosApp(App):
@@ -41,7 +42,7 @@ class KosmosApp(App):
         # Task actions
         Binding("n", "new_task", "New", show=True),
         Binding("e", "edit_task", "Edit", show=True),
-        Binding("enter", "edit_task", "Edit", show=False),
+        Binding("enter", "preview_task", "Preview", show=False),
         Binding("H", "move_task_left", "Move ←", show=False),
         Binding("L", "move_task_right", "Move →", show=False),
         Binding("shift+left", "move_task_left", "Move ←", show=False),
@@ -167,6 +168,42 @@ class KosmosApp(App):
             return
 
         # Suspend TUI and open editor
+        with self.suspend():
+            self.task_service.open_in_editor(task)
+
+        # Reload and refresh
+        self.board_service.reload()
+        screen.refresh_board()
+
+    def action_preview_task(self) -> None:
+        """Show task preview modal."""
+        screen = self.screen
+        if not isinstance(screen, BoardScreen):
+            return
+
+        task = screen.get_current_task()
+        if task is None:
+            return
+
+        self.push_screen(
+            TaskPreviewModal(task),
+            callback=self._handle_preview_result,
+        )
+
+    def _handle_preview_result(self, edit_requested: bool) -> None:
+        """Handle preview modal result."""
+        if not edit_requested:
+            return
+
+        screen = self.screen
+        if not isinstance(screen, BoardScreen):
+            return
+
+        task = screen.get_current_task()
+        if task is None:
+            return
+
+        # Open in external editor
         with self.suspend():
             self.task_service.open_in_editor(task)
 
@@ -316,8 +353,14 @@ class KosmosApp(App):
         command_bar.enter_filter_mode()
 
     def action_escape(self) -> None:
-        """Handle escape: exit filter mode or clear filter."""
+        """Handle escape: dismiss modal, exit filter mode, or clear filter."""
         screen = self.screen
+
+        # If we're on a modal screen, dismiss it
+        if isinstance(screen, ModalScreen):
+            screen.dismiss()
+            return
+
         if not isinstance(screen, BoardScreen):
             return
 
