@@ -1,49 +1,12 @@
-# Phase 3: Repository Layer
+"""Filesystem-based repository for task storage."""
 
-## Overview
-
-This phase implements the `FilesystemRepository` class that handles all file I/O operations. It reads task files from the `.tasks/` directory, parses their YAML front matter, and manages the `tasks.yaml` ordering file. The repository is the boundary between the application and the filesystem.
-
-## Goals
-
-1. Scan `.tasks/` directory for markdown files
-2. Parse YAML front matter using python-frontmatter
-3. Load and save the tasks.yaml ordering file
-4. Implement reconciliation logic (files are truth, yaml provides order)
-5. Provide CRUD operations for tasks
-6. Design for future file watching support (reload method)
-
-## Task Checklist
-
-- [x] Create `src/kosmos/repositories/filesystem.py`:
-  - [x] `FilesystemRepository` class
-  - [x] `__init__(task_root: Path)` constructor
-  - [x] `get_all() -> list[Task]` - load all tasks
-  - [x] `get_by_id(filename: str) -> Task | None` - load single task
-  - [x] `save(task: Task) -> Task` - create or update task file
-  - [x] `delete(filename: str) -> None` - remove task file
-  - [x] `get_board_order() -> BoardOrder` - load tasks.yaml
-  - [x] `save_board_order(order: BoardOrder) -> None` - save tasks.yaml
-  - [x] `reload() -> None` - refresh from filesystem
-  - [x] `ensure_directory() -> None` - create .tasks if missing
-- [x] Implement reconciliation logic:
-  - [x] If file exists but not in yaml, add to yaml
-  - [x] If file's state differs from yaml column, use file's state
-  - [x] If yaml references missing file, remove from yaml
-- [x] Update `src/kosmos/repositories/__init__.py` with exports
-- [x] Write integration tests for file operations - 18 tests passing
-
-## Detailed Specifications
-
-### FilesystemRepository (repositories/filesystem.py)
-
-```python
 from pathlib import Path
 from typing import Iterator
+
 import frontmatter
 import yaml
 
-from ..models import Task, BoardOrder, TaskState
+from ..models import BoardOrder, Task, TaskState
 
 
 class FilesystemRepository:
@@ -109,8 +72,9 @@ class FilesystemRepository:
 
         # Update board order
         self._ensure_board_order()
-        self._board_order.add_task(task.filename, task.state.value)
-        self._save_board_order()
+        if self._board_order is not None:
+            self._board_order.add_task(task.filename, task.state.value)
+            self._save_board_order()
 
         return task
 
@@ -122,14 +86,17 @@ class FilesystemRepository:
 
         # Remove from board order
         self._ensure_board_order()
-        self._board_order.remove_task(filename)
-        self._save_board_order()
+        if self._board_order is not None:
+            self._board_order.remove_task(filename)
+            self._save_board_order()
 
     # --- Board Order Operations ---
 
     def get_board_order(self) -> BoardOrder:
         """Load and return the board order."""
         self._load_board_order()
+        if self._board_order is None:
+            self._board_order = BoardOrder()
         return self._board_order
 
     def save_board_order(self, order: BoardOrder) -> None:
@@ -198,6 +165,9 @@ class FilesystemRepository:
 
     def _save_board_order(self) -> None:
         """Write tasks.yaml to disk."""
+        if self._board_order is None:
+            return
+
         self.ensure_directory()
         yaml_path = self.task_root / self.TASKS_YAML
 
@@ -216,6 +186,9 @@ class FilesystemRepository:
         - New files are added to YAML based on their state
         """
         self._ensure_board_order()
+        if self._board_order is None:
+            return
+
         modified = False
 
         # Get set of actual task filenames
@@ -229,7 +202,7 @@ class FilesystemRepository:
                     modified = True
 
         # Add new files and fix misplaced files
-        all_in_yaml = set()
+        all_in_yaml: set[str] = set()
         for filenames in self._board_order.columns.values():
             all_in_yaml.update(filenames)
 
@@ -244,7 +217,9 @@ class FilesystemRepository:
                 # Check if in wrong column (file state takes precedence)
                 current_column = self._find_task_column(filename)
                 if current_column and current_column != state_value:
-                    self._board_order.move_task(filename, current_column, state_value)
+                    self._board_order.move_task(
+                        filename, current_column, state_value
+                    )
                     modified = True
 
         if modified:
@@ -252,6 +227,8 @@ class FilesystemRepository:
 
     def _find_task_column(self, filename: str) -> str | None:
         """Find which column a task is currently in."""
+        if self._board_order is None:
+            return None
         for state, filenames in self._board_order.columns.items():
             if filename in filenames:
                 return state
@@ -259,6 +236,9 @@ class FilesystemRepository:
 
     def _sorted_tasks(self) -> list[Task]:
         """Return tasks sorted by their board order position."""
+        if self._board_order is None:
+            return list(self._tasks.values())
+
         # Build a position map for sorting
         position_map: dict[str, tuple[int, int]] = {}
 
@@ -276,122 +256,3 @@ class FilesystemRepository:
             return (999, 999, task.filename)
 
         return sorted(self._tasks.values(), key=sort_key)
-```
-
-## Reconciliation Logic
-
-The repository performs automatic reconciliation between task files and the ordering YAML:
-
-```
-┌─────────────────┐     ┌─────────────────┐
-│  Task Files     │     │   tasks.yaml    │
-│  (.md files)    │     │   (ordering)    │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-         └───────────┬───────────┘
-                     │
-              ┌──────▼──────┐
-              │ Reconcile   │
-              └──────┬──────┘
-                     │
-         ┌───────────┴───────────┐
-         ▼                       ▼
-   File exists but          File missing but
-   not in yaml?             referenced in yaml?
-         │                       │
-         ▼                       ▼
-   Add to yaml              Remove from yaml
-   (use file's state)       (clean up stale ref)
-         │                       │
-         └───────────┬───────────┘
-                     │
-                     ▼
-            File state differs
-            from yaml column?
-                     │
-                     ▼
-            Move to correct column
-            (file wins)
-```
-
-## File Format
-
-### Task File (.md)
-
-```markdown
----
-title: "Fix login timeout bug"
-state: todo
-priority: high
-tags: [bug, auth]
-created: 2025-01-01T12:00:00Z
-updated: 2025-01-02T14:00:00Z
----
-
-## Description
-
-Task content here...
-```
-
-### Ordering File (tasks.yaml)
-
-```yaml
-# Auto-generated - do not edit manually
-version: 1
-columns:
-  todo:
-    - fix-login-bug.md
-    - add-user-auth.md
-  in_progress:
-    - refactor-api.md
-  done:
-    - setup-ci.md
-  archived:
-    - old-feature.md
-```
-
-## Error Handling
-
-- Files that can't be parsed are skipped (not fatal)
-- Missing `.tasks/` directory is created automatically
-- Missing `tasks.yaml` is created with empty structure
-
-## Testing Notes
-
-Integration tests should:
-- Create a temp directory with sample .md files
-- Verify `get_all()` returns correct tasks
-- Verify `save()` writes proper front matter format
-- Verify reconciliation updates yaml correctly
-- Verify state changes in files update yaml columns
-
-## Deviations from Plan
-
-| Date | Deviation | Reason |
-|------|-----------|--------|
-| 2025-11-28 | Added null checks for `_board_order` throughout | Type safety - `_board_order` can be None before loading |
-
-## Completion Notes
-
-**Phase 3 completed on 2025-11-28**
-
-Files created:
-- `src/kosmos/repositories/filesystem.py` - FilesystemRepository implementation
-- `tests/test_repository.py` - 18 integration tests
-
-Test coverage:
-- Basic CRUD operations (get_all, get_by_id, save, delete)
-- Board order management (create, persist, reload)
-- Reconciliation logic (new files, missing files, state precedence)
-- Sorting by board order
-- Reload/cache clearing
-
-All 32 tests passing (14 slug + 18 repository).
-
-## Key Notes
-
-- The repository caches tasks after loading - call `reload()` to refresh
-- File state always takes precedence over yaml column placement
-- The `_tasks` dict uses filename as key for O(1) lookup
-- We use `frontmatter.dumps()` to preserve content formatting
-- The yaml file header warns users not to edit manually
