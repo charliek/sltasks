@@ -52,7 +52,7 @@ class KanbanColumn(Widget):
         # Use call_after_refresh to ensure DOM is ready
         self.call_after_refresh(self._refresh_tasks)
 
-    def _refresh_tasks(self) -> None:
+    async def _refresh_tasks(self) -> None:
         """Refresh the task cards in this column."""
         content_id = f"#content-{self.state.value}"
         try:
@@ -61,19 +61,19 @@ class KanbanColumn(Widget):
             self.log.error(f"Cannot find {content_id}: {e}")
             return
 
-        # Remove existing task cards
-        content.remove_children()
+        # Remove existing task cards and wait for removal to complete
+        await content.remove_children()
 
         # Show empty state or task cards
         if not self._tasks:
             state_name = self.state.value.replace("_", " ")
-            content.mount(EmptyColumnMessage(f"No {state_name} tasks"))
+            await content.mount(EmptyColumnMessage(f"No {state_name} tasks"))
         else:
             for task in self._tasks:
                 # Remove .md extension for valid Textual ID
                 task_id = task.filename.replace(".md", "")
                 card = TaskCard(task, id=f"task-{task_id}")
-                content.mount(card)
+                await content.mount(card)
 
         # Update header count
         try:
