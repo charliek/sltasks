@@ -118,7 +118,7 @@ kosmos/
 | 1 | [Project Setup](./phase-1-setup.md) | **Complete** |
 | 2 | [Models & Data Layer](./phase-2-models.md) | **Complete** |
 | 3 | [Repository Layer](./phase-3-repository.md) | **Complete** |
-| 4 | [Service Layer](./phase-4-services.md) | Not Started |
+| 4 | [Service Layer](./phase-4-services.md) | **Complete** |
 | 5 | [Basic TUI](./phase-5-basic-tui.md) | Not Started |
 | 6 | Task Cards | Planned (docs later) |
 | 7 | Navigation | Planned (docs later) |

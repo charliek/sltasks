@@ -13,26 +13,34 @@ This phase implements the service layer that contains business logic and orchest
 
 ## Task Checklist
 
-- [ ] Create `src/kosmos/services/task_service.py`:
-  - [ ] `TaskService` class
-  - [ ] `create_task(title: str) -> Task` - create new task
-  - [ ] `update_task(task: Task) -> Task` - save changes
-  - [ ] `delete_task(filename: str) -> None` - remove task
-  - [ ] `open_in_editor(task: Task) -> None` - launch $EDITOR
-- [ ] Create `src/kosmos/services/board_service.py`:
-  - [ ] `BoardService` class
-  - [ ] `load_board() -> Board` - load full board state
-  - [ ] `move_task(filename: str, to_state: TaskState) -> None`
-  - [ ] `archive_task(filename: str) -> None`
-  - [ ] `get_tasks_by_state(state: TaskState) -> list[Task]`
-- [ ] Create `src/kosmos/services/filter_service.py`:
-  - [ ] `FilterService` class (or functions)
-  - [ ] `parse_filter(expr: str) -> Filter`
-  - [ ] `apply_filter(tasks: list[Task], filter: Filter) -> list[Task]`
-- [ ] Create `src/kosmos/models/board.py` additions:
-  - [ ] `Board` model (full board with tasks grouped by state)
-- [ ] Update `src/kosmos/services/__init__.py` with exports
-- [ ] Write tests for filter parsing
+- [x] Create `src/kosmos/services/task_service.py`:
+  - [x] `TaskService` class
+  - [x] `create_task(title: str) -> Task` - create new task
+  - [x] `update_task(task: Task) -> Task` - save changes
+  - [x] `delete_task(filename: str) -> None` - remove task
+  - [x] `get_task(filename: str) -> Task | None` - get single task
+  - [x] `get_all_tasks() -> list[Task]` - get all tasks
+  - [x] `open_in_editor(task: Task) -> bool` - launch $EDITOR
+  - [x] `_unique_filename()` - handle filename collisions
+- [x] Create `src/kosmos/services/board_service.py`:
+  - [x] `BoardService` class
+  - [x] `load_board() -> Board` - load full board state
+  - [x] `move_task(filename: str, to_state: TaskState) -> Task | None`
+  - [x] `move_task_left(filename: str) -> Task | None`
+  - [x] `move_task_right(filename: str) -> Task | None`
+  - [x] `archive_task(filename: str) -> Task | None`
+  - [x] `get_tasks_by_state(state: TaskState) -> list[Task]`
+  - [x] `get_board_order() -> BoardOrder`
+  - [x] `save_board_order(order: BoardOrder) -> None`
+  - [x] `reload() -> None`
+- [x] Create `src/kosmos/services/filter_service.py`:
+  - [x] `Filter` dataclass
+  - [x] `FilterService` class
+  - [x] `parse(expr: str) -> Filter`
+  - [x] `apply(tasks: list[Task], filter_: Filter) -> list[Task]`
+- [x] `Board` model already created in Phase 2 (models/board.py)
+- [x] Update `src/kosmos/services/__init__.py` with exports
+- [x] Write tests for filter parsing - 29 tests passing
 
 ## Detailed Specifications
 
@@ -494,11 +502,28 @@ Tests should focus on:
 
 ## Deviations from Plan
 
-_This section will be updated if implementation differs from the plan._
-
 | Date | Deviation | Reason |
 |------|-----------|--------|
-| - | - | - |
+| 2025-11-28 | Added `get_task()` and `get_all_tasks()` to TaskService | Convenience methods for UI layer |
+| 2025-11-28 | Added `move_task_left()` and `move_task_right()` to BoardService | Easier keyboard navigation support |
+| 2025-11-28 | Added `get_board_order()` and `save_board_order()` to BoardService | Expose ordering for potential reordering UI |
+| 2025-11-28 | `open_in_editor()` returns bool instead of None | Allow caller to know if editor succeeded |
+
+## Completion Notes
+
+**Phase 4 completed on 2025-11-28**
+
+Files created:
+- `src/kosmos/services/task_service.py` - TaskService implementation
+- `src/kosmos/services/board_service.py` - BoardService implementation
+- `src/kosmos/services/filter_service.py` - Filter dataclass and FilterService
+- `tests/test_filter.py` - 29 tests for filter parsing and application
+
+Test coverage:
+- Filter parsing (16 tests): empty, text, tags, states, priorities, archived, complex
+- Filter application (13 tests): text search, tag matching, exclusions, combinations
+
+All 61 tests passing (14 slug + 18 repository + 29 filter).
 
 ## Key Notes
 
