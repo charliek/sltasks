@@ -66,9 +66,9 @@ class FilesystemRepository:
         post = frontmatter.Post(task.body)
         post.metadata = task.to_frontmatter()
 
-        # Write file
+        # Write file (sort_keys=False preserves original key order)
         with open(filepath, "w") as f:
-            f.write(frontmatter.dumps(post))
+            f.write(frontmatter.dumps(post, sort_keys=False))
 
         # Update board order
         self._ensure_board_order()
