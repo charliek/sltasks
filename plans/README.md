@@ -122,11 +122,11 @@ kosmos/
 | 5 | [Basic TUI](./phase-5-basic-tui.md) | **Complete** |
 | 6 | [Task Cards Enhancement](./phase-6-task-cards.md) | **Complete** |
 | 7 | [Keyboard Navigation](./phase-7-navigation.md) | **Complete** |
-| 8 | [Task Actions](./phase-8-actions.md) | Planned |
-| 9 | [Filter & Command Bar](./phase-9-filter-command.md) | Planned |
-| 10 | [Help Screen](./phase-10-help-screen.md) | Planned |
-| 11 | [Task Preview Modal](./phase-11-task-preview.md) | Planned |
-| 12 | Polish | Planned (docs later) |
+| 8 | [Task Actions](./phase-8-actions.md) | **Complete** |
+| 9 | [Filter & Command Bar](./phase-9-filter-command.md) | **Complete** |
+| 10 | [Help Screen](./phase-10-help-screen.md) | **Complete** |
+| 11 | [Task Preview Modal](./phase-11-task-preview.md) | **Complete** |
+| 12 | [Test Coverage](./phase-12-tests.md) | **Complete** |
 
 ## Design Decisions
 
