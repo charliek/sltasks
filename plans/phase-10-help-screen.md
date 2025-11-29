@@ -14,21 +14,21 @@ This phase implements a help screen that displays all available keyboard shortcu
 
 ## Task Checklist
 
-- [ ] Create `HelpScreen` modal:
-  - [ ] Display all keyboard shortcuts
-  - [ ] Organize by category (Navigation, Actions, etc.)
-  - [ ] Show filter syntax reference
-  - [ ] Version information at bottom
-- [ ] Update `action_help()` in `KosmosApp`:
-  - [ ] Push help screen as modal
-  - [ ] Dismiss on any key press
-- [ ] Style the help screen:
-  - [ ] Centered modal dialog
-  - [ ] Clear typography hierarchy
-  - [ ] Muted secondary text
-- [ ] Add dynamic binding collection (optional):
-  - [ ] Collect bindings from app
-  - [ ] Auto-generate help content
+- [x] Create `HelpScreen` modal:
+  - [x] Display all keyboard shortcuts
+  - [x] Organize by category (Navigation, Actions, etc.)
+  - [x] Show filter syntax reference
+  - [-] Version information at bottom (simplified to "Press any key to close")
+- [x] Update `action_help()` in `KosmosApp`:
+  - [x] Push help screen as modal
+  - [x] Dismiss on any key press
+- [x] Style the help screen:
+  - [x] Centered modal dialog
+  - [x] Clear typography hierarchy
+  - [x] Muted secondary text
+- [-] Add dynamic binding collection (optional):
+  - [-] Collect bindings from app (deferred)
+  - [-] Auto-generate help content (deferred)
 
 ## Detailed Specifications
 
@@ -266,11 +266,11 @@ Manual testing scenarios:
 
 ## Deviations from Plan
 
-_This section will be updated if implementation differs from the plan._
-
 | Date | Deviation | Reason |
 |------|-----------|--------|
-| - | - | - |
+| 2025-11-28 | Simplified footer to "Press any key to close" | Version info not essential, keeps help cleaner |
+| 2025-11-28 | Deferred dynamic binding collection | Manual approach works well and is more readable |
+| 2025-11-28 | HelpScreen in screens/help.py instead of widgets | ModalScreen is a screen type, not a widget |
 
 ## Key Notes
 

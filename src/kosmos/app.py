@@ -8,7 +8,7 @@ from .models import TaskState
 from .repositories import FilesystemRepository
 from .services import BoardService, FilterService, TaskService
 from .ui.screens.board import BoardScreen
-from .ui.widgets import CommandBar, ConfirmModal
+from .ui.widgets import CommandBar, ConfirmModal, HelpScreen
 
 
 class KosmosApp(App):
@@ -88,8 +88,8 @@ class KosmosApp(App):
             screen.refresh_board()
 
     def action_help(self) -> None:
-        """Show help (placeholder for now)."""
-        self.notify("Help screen coming in a future phase!", title="Help")
+        """Show help screen."""
+        self.push_screen(HelpScreen())
 
     # Navigation actions
     def action_nav_left(self) -> None:
