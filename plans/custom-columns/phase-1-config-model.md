@@ -14,37 +14,37 @@ This phase establishes the configuration infrastructure for custom columns. We c
 
 ## Task Checklist
 
-- [ ] Create `src/kosmos/models/sltasks_config.py`:
-  - [ ] `ColumnConfig` model with `id` and `title` fields
-  - [ ] `BoardConfig` model with `columns` list (min=2, max=6)
-  - [ ] `SltasksConfig` root model with `version` and `board`
-  - [ ] Validator for unique column IDs
-  - [ ] Validator rejecting "archived" as column ID
-  - [ ] `default()` class method returning 3-column default
-- [ ] Create `src/kosmos/services/config_service.py`:
-  - [ ] `ConfigService` class with `task_root` parameter
-  - [ ] `get_config()` method returning cached `SltasksConfig`
-  - [ ] `_load_config()` private method for YAML parsing
-  - [ ] Fallback to `SltasksConfig.default()` on missing/invalid file
-  - [ ] `reload()` method to clear cache
-- [ ] Update `src/kosmos/models/__init__.py` with exports
-- [ ] Update `src/kosmos/services/__init__.py` with exports
-- [ ] Wire into `src/kosmos/app.py`:
-  - [ ] Add `config_service` property
-  - [ ] Initialize on app startup
-- [ ] Create `tests/test_sltasks_config.py`:
-  - [ ] Test default config has 3 columns
-  - [ ] Test min columns validation (< 2 fails)
-  - [ ] Test max columns validation (> 6 fails)
-  - [ ] Test unique IDs validation
-  - [ ] Test "archived" rejection
-  - [ ] Test valid custom config parsing
-- [ ] Create `tests/test_config_service.py`:
-  - [ ] Test loading from valid file
-  - [ ] Test fallback on missing file
-  - [ ] Test fallback on invalid YAML
-  - [ ] Test caching behavior
-  - [ ] Test reload clears cache
+- [x] Create `src/kosmos/models/sltasks_config.py`:
+  - [x] `ColumnConfig` model with `id` and `title` fields
+  - [x] `BoardConfig` model with `columns` list (min=2, max=6)
+  - [x] `SltasksConfig` root model with `version` and `board`
+  - [x] Validator for unique column IDs
+  - [x] Validator rejecting "archived" as column ID
+  - [x] `default()` class method returning 3-column default
+- [x] Create `src/kosmos/services/config_service.py`:
+  - [x] `ConfigService` class with `task_root` parameter
+  - [x] `get_config()` method returning cached `SltasksConfig`
+  - [x] `_load_config()` private method for YAML parsing
+  - [x] Fallback to `SltasksConfig.default()` on missing/invalid file
+  - [x] `reload()` method to clear cache
+- [x] Update `src/kosmos/models/__init__.py` with exports
+- [x] Update `src/kosmos/services/__init__.py` with exports
+- [x] Wire into `src/kosmos/app.py`:
+  - [x] Add `config_service` property
+  - [x] Initialize on app startup
+- [x] Create `tests/test_sltasks_config.py`:
+  - [x] Test default config has 3 columns
+  - [x] Test min columns validation (< 2 fails)
+  - [x] Test max columns validation (> 6 fails)
+  - [x] Test unique IDs validation
+  - [x] Test "archived" rejection
+  - [x] Test valid custom config parsing
+- [x] Create `tests/test_config_service.py`:
+  - [x] Test loading from valid file
+  - [x] Test fallback on missing file
+  - [x] Test fallback on invalid YAML
+  - [x] Test caching behavior
+  - [x] Test reload clears cache
 
 ## Detailed Specifications
 

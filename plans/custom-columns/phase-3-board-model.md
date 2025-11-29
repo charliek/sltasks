@@ -14,24 +14,31 @@ This phase refactors the `Board` and `BoardOrder` models to support dynamic colu
 
 ## Task Checklist
 
-- [ ] Update `src/kosmos/models/board.py`:
-  - [ ] Replace fixed `todo`, `in_progress`, `done`, `archived` fields with `columns: dict[str, list[Task]]`
-  - [ ] Update `from_tasks()` to accept `BoardConfig` parameter
-  - [ ] Add method to get tasks for a specific column
-  - [ ] Update `visible_columns` property to use config
-  - [ ] Update `BoardOrder` default columns to be dynamic
-- [ ] Update `src/kosmos/repositories/filesystem.py`:
-  - [ ] Inject `ConfigService` dependency
-  - [ ] Update `_load_board_order()` for dynamic columns
-  - [ ] Update `_reconcile()` for dynamic columns
-  - [ ] Update `_sorted_tasks()` for dynamic column order
-  - [ ] Update `_save_board_order()` to preserve custom columns
-- [ ] Update `src/kosmos/services/board_service.py`:
-  - [ ] Update `load_board()` to pass config to `Board.from_tasks()`
-- [ ] Add/update tests:
-  - [ ] Test Board with custom columns
-  - [ ] Test BoardOrder with custom columns
-  - [ ] Test repository with custom column ordering
+- [x] Update `src/kosmos/models/board.py`:
+  - [x] Replace fixed `todo`, `in_progress`, `done`, `archived` fields with `columns: dict[str, list[Task]]`
+  - [x] Update `from_tasks()` to accept `BoardConfig` parameter
+  - [x] Add `get_column()` method to get tasks for a specific column
+  - [x] Add `get_visible_columns()` method returning (id, title, tasks) tuples
+  - [x] Update `BoardOrder` with `default()` and `from_config()` class methods
+  - [x] Add `ensure_column()` method to BoardOrder
+  - [x] Add backwards compat properties (to be removed in Phase 6)
+- [x] Update `src/kosmos/repositories/filesystem.py`:
+  - [x] Inject `ConfigService` dependency (optional parameter)
+  - [x] Add `_get_board_config()` helper method
+  - [x] Update `_load_board_order()` to use `BoardOrder.from_config()`
+  - [x] Update `_ensure_board_order()` to ensure config columns exist
+  - [x] Update `_sorted_tasks()` for dynamic column order from config
+- [x] Update `src/kosmos/services/board_service.py`:
+  - [x] Accept optional `ConfigService` dependency
+  - [x] Add `_get_board_config()` helper method
+  - [x] Update `load_board()` to pass config to `Board.from_tasks()`
+  - [x] Update `_previous_state()` and `_next_state()` to use config column order
+- [x] Add/update tests:
+  - [x] Test Board with custom columns
+  - [x] Test BoardOrder with custom columns
+  - [x] Test unknown state goes to first column
+  - [x] Test archived always available
+  - [x] Test get_visible_columns()
 
 ## Detailed Specifications
 
@@ -558,16 +565,33 @@ def test_repository_unknown_state_mapped(task_dir: Path):
 
 | Date | Deviation | Reason |
 |------|-----------|--------|
+| 2025-11-29 | Added `get_visible_columns()` method instead of property | Method allows passing config parameter |
+| 2025-11-29 | Added `_get_board_config()` helper to services | Cleaner code, consistent pattern |
 
 ## Completion Notes
 
-**Phase 3 status: Pending**
+**Phase 3 status: Complete**
+
+Completed on 2025-11-29.
+
+Files modified:
+- `src/kosmos/models/board.py` - Refactored to use `columns: dict[str, list[Task]]`, added class methods
+- `src/kosmos/repositories/filesystem.py` - Added ConfigService injection, dynamic column support
+- `src/kosmos/services/board_service.py` - Added ConfigService injection, config-based navigation
+- `tests/test_models.py` - Added 9 tests for dynamic columns
+
+Verification:
+- All 148 tests passing
+- Board now supports custom column configurations
+- Unknown states placed in first configured column
+- Archived column always available
 
 ## Key Notes
 
 - Board model now uses `dict[str, list[Task]]` for flexibility
-- Backwards compatibility properties (`todo`, `in_progress`, `done`) preserved
+- Backwards compatibility properties (`todo`, `in_progress`, `done`) preserved for now (remove in Phase 6)
 - Unknown states silently map to first configured column
 - `BoardOrder.from_config()` creates order with config-defined columns
-- Repository needs ConfigService injected to know valid columns
-- `visible_columns()` now returns tuples of (id, title, tasks)
+- Repository and BoardService accept optional ConfigService
+- `get_visible_columns()` returns tuples of (id, title, tasks)
+- Navigation (`_previous_state`, `_next_state`) now uses config column order

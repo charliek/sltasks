@@ -15,18 +15,26 @@ This phase migrates the `Task.state` field from the `TaskState` enum to a string
 
 ## Task Checklist
 
-- [ ] Update `src/kosmos/models/task.py`:
-  - [ ] Change `state: TaskState = TaskState.TODO` to `state: str = "todo"`
-  - [ ] Update `to_frontmatter()` - no `.value` needed for strings
-  - [ ] Update `from_frontmatter()` to handle both legacy enum and string
-- [ ] Update `src/kosmos/models/enums.py`:
-  - [ ] Keep `TaskState` enum (for backwards compat)
-  - [ ] Add module-level constants for common states
-- [ ] Update tests:
-  - [ ] `tests/test_models.py` - use string states
-  - [ ] Any other tests referencing `TaskState`
-- [ ] Verify existing task files load correctly
-- [ ] Run full test suite
+- [x] Update `src/kosmos/models/task.py`:
+  - [x] Change `state: TaskState = TaskState.TODO` to `state: str = "todo"`
+  - [x] Update `to_frontmatter()` - no `.value` needed for strings
+  - [x] Update `from_frontmatter()` to handle both legacy enum and string
+  - [x] Add module-level constants for common states (STATE_TODO, etc.)
+- [x] Update `src/kosmos/models/enums.py`:
+  - [x] Keep `TaskState` enum (for backwards compat)
+- [x] Update `src/kosmos/models/__init__.py`:
+  - [x] Export state constants
+- [x] Update dependent code (expanded scope to keep tests passing):
+  - [x] `src/kosmos/models/board.py` - from_tasks() uses string matching
+  - [x] `src/kosmos/repositories/filesystem.py` - removed .value from state access
+  - [x] `src/kosmos/services/board_service.py` - string states throughout
+  - [x] `src/kosmos/services/task_service.py` - create_task uses string state
+- [x] Update tests:
+  - [x] `tests/test_models.py` - use string states
+  - [x] `tests/test_board_service.py` - use string states
+  - [x] `tests/test_repository.py` - use string states
+- [x] Verify existing task files load correctly
+- [x] Run full test suite (139 tests passing)
 
 ## Detailed Specifications
 
@@ -362,15 +370,35 @@ Task body here.
 
 | Date | Deviation | Reason |
 |------|-----------|--------|
+| 2025-11-29 | Updated Board.from_tasks and board_service early | Required for tests to pass; match case needed string constants instead of enum |
+| 2025-11-29 | Updated filesystem repository early | Required for tests to pass; .state.value needed to become .state |
+| 2025-11-29 | Updated task_service early | Required for tests to pass; state parameter changed to str |
 
 ## Completion Notes
 
-**Phase 2 status: Pending**
+**Phase 2 status: Complete**
+
+Completed on 2025-11-29.
+
+Files modified:
+- `src/kosmos/models/task.py` - Added state constants, changed state to str
+- `src/kosmos/models/__init__.py` - Added state constant exports
+- `src/kosmos/models/board.py` - Updated from_tasks to use string matching
+- `src/kosmos/repositories/filesystem.py` - Removed .value from state access
+- `src/kosmos/services/board_service.py` - Updated to use string states
+- `src/kosmos/services/task_service.py` - Updated create_task signature
+- `tests/test_models.py` - Updated to use string states
+- `tests/test_board_service.py` - Updated to use string states
+- `tests/test_repository.py` - Updated to use string states
+
+Verification:
+- All 139 tests passing
+- State constants exported: STATE_TODO, STATE_IN_PROGRESS, STATE_DONE, STATE_ARCHIVED
 
 ## Key Notes
 
 - `TaskState` enum is preserved but deprecated for backwards compatibility
 - String states allow any value - validation happens at ConfigService level (Phase 4)
 - Priority remains an enum (no change needed)
-- This phase focuses only on Task model - Board/Service/UI changes come in later phases
-- Existing test files may temporarily fail until Phase 4 updates filter/service tests
+- Phase 2 expanded to include repository/service changes to maintain passing tests
+- Board model still uses hardcoded columns (Phase 3 will make this dynamic)

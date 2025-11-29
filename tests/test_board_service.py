@@ -3,7 +3,13 @@
 import pytest
 from pathlib import Path
 
-from kosmos.models import Task, TaskState, Priority
+from kosmos.models import Task, Priority
+from kosmos.models.task import (
+    STATE_ARCHIVED,
+    STATE_DONE,
+    STATE_IN_PROGRESS,
+    STATE_TODO,
+)
 from kosmos.repositories import FilesystemRepository
 from kosmos.services import BoardService
 
@@ -67,14 +73,14 @@ class TestBoardServiceMoveTask:
         """move_task updates state in file and board order."""
         create_task_file(task_dir, "task.md", "todo")
 
-        result = board_service.move_task("task.md", TaskState.IN_PROGRESS)
+        result = board_service.move_task("task.md", STATE_IN_PROGRESS)
 
         assert result is not None
-        assert result.state == TaskState.IN_PROGRESS
+        assert result.state == STATE_IN_PROGRESS
 
         # Verify persisted
         reloaded = repo.get_by_id("task.md")
-        assert reloaded.state == TaskState.IN_PROGRESS
+        assert reloaded.state == STATE_IN_PROGRESS
 
     def test_move_task_left_from_in_progress(
         self, board_service: BoardService, task_dir: Path
@@ -85,7 +91,7 @@ class TestBoardServiceMoveTask:
         result = board_service.move_task_left("task.md")
 
         assert result is not None
-        assert result.state == TaskState.TODO
+        assert result.state == STATE_TODO
 
     def test_move_task_left_from_todo_stays(
         self, board_service: BoardService, task_dir: Path
@@ -96,7 +102,7 @@ class TestBoardServiceMoveTask:
         result = board_service.move_task_left("task.md")
 
         assert result is not None
-        assert result.state == TaskState.TODO
+        assert result.state == STATE_TODO
 
     def test_move_task_right_from_done_stays(
         self, board_service: BoardService, task_dir: Path
@@ -107,7 +113,7 @@ class TestBoardServiceMoveTask:
         result = board_service.move_task_right("task.md")
 
         assert result is not None
-        assert result.state == TaskState.DONE
+        assert result.state == STATE_DONE
 
     def test_move_task_from_archived_does_nothing(
         self, board_service: BoardService, task_dir: Path
@@ -117,11 +123,11 @@ class TestBoardServiceMoveTask:
 
         result_left = board_service.move_task_left("task.md")
         assert result_left is not None
-        assert result_left.state == TaskState.ARCHIVED
+        assert result_left.state == STATE_ARCHIVED
 
         result_right = board_service.move_task_right("task.md")
         assert result_right is not None
-        assert result_right.state == TaskState.ARCHIVED
+        assert result_right.state == STATE_ARCHIVED
 
 
 class TestBoardServiceArchive:
@@ -136,7 +142,7 @@ class TestBoardServiceArchive:
         result = board_service.archive_task("task.md")
 
         assert result is not None
-        assert result.state == TaskState.ARCHIVED
+        assert result.state == STATE_ARCHIVED
 
 
 class TestBoardServiceReorder:

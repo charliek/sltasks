@@ -4,7 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
-from ..models import Priority, Task, TaskState
+from ..models import Priority, Task
+from ..models.task import STATE_TODO
 from ..repositories import FilesystemRepository
 from ..utils import generate_filename, now_utc
 
@@ -18,7 +19,7 @@ class TaskService:
     def create_task(
         self,
         title: str,
-        state: TaskState = TaskState.TODO,
+        state: str = STATE_TODO,
         priority: Priority = Priority.MEDIUM,
         tags: list[str] | None = None,
     ) -> Task:

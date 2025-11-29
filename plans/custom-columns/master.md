@@ -97,8 +97,8 @@ Validation moves from compile-time (enum) to runtime (config-based).
 | Phase | Description | Risk | Status |
 |-------|-------------|------|--------|
 | 1 | [Config Model & Service](./phase-1-config-model.md) | Low | **Complete** |
-| 2 | [Task State Migration](./phase-2-task-state-migration.md) | Medium | Pending |
-| 3 | [Board Model Refactor](./phase-3-board-model.md) | Medium | Pending |
+| 2 | [Task State Migration](./phase-2-task-state-migration.md) | Medium | **Complete** |
+| 3 | [Board Model Refactor](./phase-3-board-model.md) | Medium | **Complete** |
 | 4 | [Service Layer Updates](./phase-4-service-layer.md) | Medium | Pending |
 | 5 | [Dynamic UI Generation](./phase-5-dynamic-ui.md) | High | Pending |
 | 6 | [Polish & Edge Cases](./phase-6-polish.md) | Low | Pending |
@@ -139,6 +139,7 @@ Validation moves from compile-time (enum) to runtime (config-based).
 - **Column IDs must be unique**
 - **`archived` is reserved** – cannot be used as a column ID (always available as hidden status)
 - **1:1 status mapping** – each status maps to exactly one column
+- **No backwards compatibility code** – this is an early project, remove deprecated code in Phase 6 rather than maintaining it
 
 ## Risk Mitigations
 

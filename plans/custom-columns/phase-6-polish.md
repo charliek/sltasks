@@ -31,6 +31,13 @@ This final phase handles edge cases, improves error handling, adds documentation
   - [ ] Add docstrings to new classes/methods
   - [ ] Update README with custom columns info
   - [ ] Add example `sltasks.yml` to docs or examples
+- [ ] Code cleanup (no backwards compatibility - early project):
+  - [ ] Remove deprecated `TaskState` enum from `models/enums.py`
+  - [ ] Remove `TaskState` from `models/__init__.py` exports
+  - [ ] Update any remaining code that imports `TaskState`
+  - [ ] Search for and remove any `.value` usage on task states
+  - [ ] Remove backwards compatibility properties from Board (`todo`, `in_progress`, `done`)
+  - [ ] Remove any other deprecated/compatibility code
 - [ ] Test coverage:
   - [ ] Ensure >90% coverage on new code
   - [ ] Add edge case tests
@@ -38,7 +45,7 @@ This final phase handles edge cases, improves error handling, adds documentation
 - [ ] Final verification:
   - [ ] Run full test suite
   - [ ] Manual testing with various configs
-  - [ ] Check for any remaining TaskState references
+  - [ ] Grep for any remaining TaskState references
 
 ## Detailed Specifications
 

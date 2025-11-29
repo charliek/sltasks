@@ -1,12 +1,18 @@
 """Filesystem-based repository for task storage."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
 
 import frontmatter
 import yaml
 
-from ..models import BoardOrder, Task, TaskState
+from ..models import BoardOrder, Task
+from ..models.sltasks_config import BoardConfig
+
+if TYPE_CHECKING:
+    from ..services.config_service import ConfigService
 
 
 class FilesystemRepository:
@@ -19,16 +25,26 @@ class FilesystemRepository:
 
     TASKS_YAML = "tasks.yaml"
 
-    def __init__(self, task_root: Path) -> None:
+    def __init__(
+        self, task_root: Path, config_service: ConfigService | None = None
+    ) -> None:
         """
         Initialize repository.
 
         Args:
             task_root: Path to the tasks directory (e.g., .tasks/)
+            config_service: Optional config service for column configuration
         """
         self.task_root = task_root
+        self._config_service = config_service
         self._tasks: dict[str, Task] = {}
         self._board_order: BoardOrder | None = None
+
+    def _get_board_config(self) -> BoardConfig:
+        """Get board config, using default if no config service."""
+        if self._config_service:
+            return self._config_service.get_board_config()
+        return BoardConfig.default()
 
     def ensure_directory(self) -> None:
         """Create the tasks directory if it doesn't exist."""
@@ -73,7 +89,7 @@ class FilesystemRepository:
         # Update board order
         self._ensure_board_order()
         if self._board_order is not None:
-            self._board_order.add_task(task.filename, task.state.value)
+            self._board_order.add_task(task.filename, task.state)
             self._save_board_order()
 
         return task
@@ -96,7 +112,7 @@ class FilesystemRepository:
         """Load and return the board order."""
         self._load_board_order()
         if self._board_order is None:
-            self._board_order = BoardOrder()
+            self._board_order = BoardOrder.default()
         return self._board_order
 
     def save_board_order(self, order: BoardOrder) -> None:
@@ -171,12 +187,21 @@ class FilesystemRepository:
                 data = yaml.safe_load(f) or {}
             self._board_order = BoardOrder(**data)
         else:
-            self._board_order = BoardOrder()
+            # Create new board order from config (or default)
+            config = self._get_board_config()
+            self._board_order = BoardOrder.from_config(config)
 
     def _ensure_board_order(self) -> None:
-        """Ensure board order is loaded."""
+        """Ensure board order is loaded and has all config columns."""
         if self._board_order is None:
             self._load_board_order()
+
+        # Ensure all config columns exist in board order
+        if self._board_order is not None:
+            config = self._get_board_config()
+            for col in config.columns:
+                self._board_order.ensure_column(col.id)
+            self._board_order.ensure_column("archived")
 
     def _save_board_order(self) -> None:
         """Write tasks.yaml to disk."""
@@ -222,7 +247,7 @@ class FilesystemRepository:
             all_in_yaml.update(filenames)
 
         for filename, task in self._tasks.items():
-            state_value = task.state.value
+            state_value = task.state  # Now a string, no .value needed
 
             if filename not in all_in_yaml:
                 # New file - add to appropriate column
@@ -254,11 +279,14 @@ class FilesystemRepository:
         if self._board_order is None:
             return list(self._tasks.values())
 
+        # Get column order from config
+        config = self._get_board_config()
+        column_ids = [col.id for col in config.columns] + ["archived"]
+
         # Build a position map for sorting
         position_map: dict[str, tuple[int, int]] = {}
 
-        state_order = ["todo", "in_progress", "done", "archived"]
-        for state_idx, state in enumerate(state_order):
+        for state_idx, state in enumerate(column_ids):
             filenames = self._board_order.columns.get(state, [])
             for pos_idx, filename in enumerate(filenames):
                 position_map[filename] = (state_idx, pos_idx)

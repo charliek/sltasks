@@ -1,27 +1,48 @@
 """Service for board state management."""
 
-from ..models import Board, BoardOrder, Task, TaskState
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from ..models import Board, BoardOrder, Task
+from ..models.sltasks_config import BoardConfig
+from ..models.task import STATE_ARCHIVED
 from ..repositories import FilesystemRepository
 from ..utils import now_utc
+
+if TYPE_CHECKING:
+    from .config_service import ConfigService
 
 
 class BoardService:
     """Service for board state management."""
 
-    def __init__(self, repository: FilesystemRepository) -> None:
+    def __init__(
+        self,
+        repository: FilesystemRepository,
+        config_service: ConfigService | None = None,
+    ) -> None:
         self.repository = repository
+        self._config_service = config_service
+
+    def _get_board_config(self) -> BoardConfig:
+        """Get board config, using default if no config service."""
+        if self._config_service:
+            return self._config_service.get_board_config()
+        return BoardConfig.default()
 
     def load_board(self) -> Board:
         """Load the full board with all tasks grouped by state."""
         tasks = self.repository.get_all()
-        return Board.from_tasks(tasks)
+        config = self._get_board_config()
+        return Board.from_tasks(tasks, config)
 
-    def get_tasks_by_state(self, state: TaskState) -> list[Task]:
+    def get_tasks_by_state(self, state: str) -> list[Task]:
         """Get all tasks in a specific state."""
         tasks = self.repository.get_all()
         return [t for t in tasks if t.state == state]
 
-    def move_task(self, filename: str, to_state: TaskState) -> Task | None:
+    def move_task(self, filename: str, to_state: str) -> Task | None:
         """
         Move a task to a different state/column.
 
@@ -65,7 +86,7 @@ class BoardService:
 
     def archive_task(self, filename: str) -> Task | None:
         """Move a task to the archived state."""
-        return self.move_task(filename, TaskState.ARCHIVED)
+        return self.move_task(filename, STATE_ARCHIVED)
 
     def get_board_order(self) -> BoardOrder:
         """Get the current board order."""
@@ -91,7 +112,7 @@ class BoardService:
             return False
 
         board_order = self.repository.get_board_order()
-        column = board_order.columns.get(task.state.value, [])
+        column = board_order.columns.get(task.state, [])
 
         if filename not in column:
             return False
@@ -114,24 +135,26 @@ class BoardService:
         """Reload board state from filesystem."""
         self.repository.reload()
 
-    def _previous_state(self, state: TaskState) -> TaskState | None:
+    def _previous_state(self, state: str) -> str | None:
         """Get the previous state in the workflow."""
-        order = [TaskState.TODO, TaskState.IN_PROGRESS, TaskState.DONE]
+        config = self._get_board_config()
+        column_ids = [col.id for col in config.columns]
         try:
-            idx = order.index(state)
+            idx = column_ids.index(state)
             if idx > 0:
-                return order[idx - 1]
+                return column_ids[idx - 1]
         except ValueError:
             pass
         return None
 
-    def _next_state(self, state: TaskState) -> TaskState | None:
+    def _next_state(self, state: str) -> str | None:
         """Get the next state in the workflow."""
-        order = [TaskState.TODO, TaskState.IN_PROGRESS, TaskState.DONE]
+        config = self._get_board_config()
+        column_ids = [col.id for col in config.columns]
         try:
-            idx = order.index(state)
-            if idx < len(order) - 1:
-                return order[idx + 1]
+            idx = column_ids.index(state)
+            if idx < len(column_ids) - 1:
+                return column_ids[idx + 1]
         except ValueError:
             pass
         return None

@@ -5,7 +5,13 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .enums import Priority, TaskState
+from .enums import Priority
+
+# State constants for common states
+STATE_TODO = "todo"
+STATE_IN_PROGRESS = "in_progress"
+STATE_DONE = "done"
+STATE_ARCHIVED = "archived"
 
 
 class Task(BaseModel):
@@ -17,7 +23,7 @@ class Task(BaseModel):
 
     # Front matter fields (all optional with defaults)
     title: str | None = None  # Defaults to filename without .md
-    state: TaskState = TaskState.TODO
+    state: str = STATE_TODO  # Now a string to support custom states
     priority: Priority = Priority.MEDIUM
     tags: list[str] = Field(default_factory=list)
     created: datetime | None = None
@@ -38,7 +44,7 @@ class Task(BaseModel):
         data: dict = {}
         if self.title:
             data["title"] = self.title
-        data["state"] = self.state.value
+        data["state"] = self.state  # String, no .value needed
         data["priority"] = self.priority.value
         if self.tags:
             data["tags"] = self.tags
@@ -61,7 +67,7 @@ class Task(BaseModel):
             filename=filename,
             filepath=filepath,
             title=metadata.get("title"),
-            state=TaskState(metadata.get("state", "todo")),
+            state=metadata.get("state", STATE_TODO),
             priority=Priority(metadata.get("priority", "medium")),
             tags=metadata.get("tags", []),
             created=_parse_datetime(metadata.get("created")),

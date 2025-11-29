@@ -3,22 +3,28 @@
 import pytest
 from datetime import datetime, timezone
 
-from kosmos.models import Task, TaskState, Priority, Board
-from kosmos.models.task import _parse_datetime
+from kosmos.models import Task, TaskState, Priority, Board, BoardOrder
+from kosmos.models import BoardConfig, ColumnConfig
+from kosmos.models.task import (
+    STATE_TODO,
+    STATE_IN_PROGRESS,
+    STATE_DONE,
+    STATE_ARCHIVED,
+    _parse_datetime,
+)
 
 
 class TestTaskFromFrontmatter:
     """Tests for Task.from_frontmatter edge cases."""
 
-    def test_from_frontmatter_invalid_state_uses_default(self):
-        """Invalid state value raises ValueError (Pydantic validation)."""
-        # TaskState enum will raise ValueError for invalid values
-        with pytest.raises(ValueError):
-            Task.from_frontmatter(
-                filename="task.md",
-                metadata={"state": "invalid_state"},
-                body="",
-            )
+    def test_from_frontmatter_unknown_state_accepted(self):
+        """Unknown state values are accepted (validation happens at config level)."""
+        task = Task.from_frontmatter(
+            filename="task.md",
+            metadata={"state": "custom_state"},
+            body="",
+        )
+        assert task.state == "custom_state"
 
     def test_from_frontmatter_invalid_priority_uses_default(self):
         """Invalid priority value raises ValueError (Pydantic validation)."""
@@ -36,7 +42,7 @@ class TestTaskFromFrontmatter:
             metadata={},
             body="",
         )
-        assert task.state == TaskState.TODO
+        assert task.state == STATE_TODO
 
     def test_from_frontmatter_missing_priority_uses_default(self):
         """Missing priority defaults to 'medium'."""
@@ -109,10 +115,10 @@ class TestBoardFromTasks:
     def test_from_tasks_groups_all_states(self):
         """from_tasks correctly groups tasks by all 4 states."""
         tasks = [
-            Task(filename="t1.md", state=TaskState.TODO),
-            Task(filename="t2.md", state=TaskState.IN_PROGRESS),
-            Task(filename="t3.md", state=TaskState.DONE),
-            Task(filename="t4.md", state=TaskState.ARCHIVED),
+            Task(filename="t1.md", state=STATE_TODO),
+            Task(filename="t2.md", state=STATE_IN_PROGRESS),
+            Task(filename="t3.md", state=STATE_DONE),
+            Task(filename="t4.md", state=STATE_ARCHIVED),
         ]
 
         board = Board.from_tasks(tasks)
@@ -138,9 +144,9 @@ class TestBoardFromTasks:
     def test_from_tasks_multiple_same_state(self):
         """from_tasks handles multiple tasks in same state."""
         tasks = [
-            Task(filename="t1.md", state=TaskState.TODO),
-            Task(filename="t2.md", state=TaskState.TODO),
-            Task(filename="t3.md", state=TaskState.TODO),
+            Task(filename="t1.md", state=STATE_TODO),
+            Task(filename="t2.md", state=STATE_TODO),
+            Task(filename="t3.md", state=STATE_TODO),
         ]
 
         board = Board.from_tasks(tasks)
@@ -148,3 +154,149 @@ class TestBoardFromTasks:
         assert len(board.todo) == 3
         filenames = [t.filename for t in board.todo]
         assert filenames == ["t1.md", "t2.md", "t3.md"]
+
+
+class TestBoardDynamicColumns:
+    """Tests for Board with dynamic column configuration."""
+
+    def test_from_tasks_custom_config(self):
+        """from_tasks with custom config creates correct columns."""
+        config = BoardConfig(
+            columns=[
+                ColumnConfig(id="backlog", title="Backlog"),
+                ColumnConfig(id="active", title="Active"),
+                ColumnConfig(id="complete", title="Complete"),
+            ]
+        )
+        tasks = [
+            Task(filename="a.md", state="backlog"),
+            Task(filename="b.md", state="active"),
+            Task(filename="c.md", state="complete"),
+        ]
+
+        board = Board.from_tasks(tasks, config)
+
+        assert len(board.get_column("backlog")) == 1
+        assert len(board.get_column("active")) == 1
+        assert len(board.get_column("complete")) == 1
+        assert board.get_column("backlog")[0].filename == "a.md"
+
+    def test_unknown_state_goes_to_first_column(self):
+        """Tasks with unknown states go to first configured column."""
+        config = BoardConfig(
+            columns=[
+                ColumnConfig(id="todo", title="To Do"),
+                ColumnConfig(id="done", title="Done"),
+            ]
+        )
+        tasks = [
+            Task(filename="a.md", state="weird_unknown_state"),
+        ]
+
+        board = Board.from_tasks(tasks, config)
+
+        # Unknown state placed in first column (todo)
+        assert len(board.get_column("todo")) == 1
+        assert board.get_column("todo")[0].filename == "a.md"
+        # Original state preserved on task
+        assert board.get_column("todo")[0].state == "weird_unknown_state"
+
+    def test_archived_always_available(self):
+        """Archived column always exists even with custom config."""
+        config = BoardConfig(
+            columns=[
+                ColumnConfig(id="backlog", title="Backlog"),
+                ColumnConfig(id="done", title="Done"),
+            ]
+        )
+        tasks = [
+            Task(filename="archived.md", state=STATE_ARCHIVED),
+        ]
+
+        board = Board.from_tasks(tasks, config)
+
+        assert len(board.archived) == 1
+        assert board.archived[0].filename == "archived.md"
+
+    def test_get_visible_columns(self):
+        """get_visible_columns returns correct tuples."""
+        config = BoardConfig(
+            columns=[
+                ColumnConfig(id="a", title="Column A"),
+                ColumnConfig(id="b", title="Column B"),
+            ]
+        )
+        tasks = [
+            Task(filename="1.md", state="a"),
+            Task(filename="2.md", state="b"),
+            Task(filename="3.md", state=STATE_ARCHIVED),
+        ]
+
+        board = Board.from_tasks(tasks, config)
+        visible = board.get_visible_columns(config)
+
+        assert len(visible) == 2
+        assert visible[0] == ("a", "Column A", board.get_column("a"))
+        assert visible[1] == ("b", "Column B", board.get_column("b"))
+
+    def test_backwards_compat_properties(self):
+        """Old property names still work with default config."""
+        tasks = [
+            Task(filename="a.md", state=STATE_TODO),
+            Task(filename="b.md", state=STATE_IN_PROGRESS),
+            Task(filename="c.md", state=STATE_DONE),
+        ]
+
+        board = Board.from_tasks(tasks)
+
+        # Old property access still works
+        assert len(board.todo) == 1
+        assert len(board.in_progress) == 1
+        assert len(board.done) == 1
+
+
+class TestBoardOrderDynamic:
+    """Tests for BoardOrder with dynamic columns."""
+
+    def test_default_creates_standard_columns(self):
+        """BoardOrder.default() creates standard 4 columns."""
+        order = BoardOrder.default()
+
+        assert "todo" in order.columns
+        assert "in_progress" in order.columns
+        assert "done" in order.columns
+        assert "archived" in order.columns
+
+    def test_from_config_creates_config_columns(self):
+        """BoardOrder.from_config() creates columns from config."""
+        config = BoardConfig(
+            columns=[
+                ColumnConfig(id="backlog", title="Backlog"),
+                ColumnConfig(id="active", title="Active"),
+            ]
+        )
+
+        order = BoardOrder.from_config(config)
+
+        assert "backlog" in order.columns
+        assert "active" in order.columns
+        assert "archived" in order.columns  # Always added
+        assert "todo" not in order.columns  # Not in config
+
+    def test_ensure_column_creates_missing(self):
+        """ensure_column creates column if missing."""
+        order = BoardOrder.default()
+
+        assert "custom" not in order.columns
+        order.ensure_column("custom")
+        assert "custom" in order.columns
+        assert order.columns["custom"] == []
+
+    def test_ensure_column_no_op_for_existing(self):
+        """ensure_column doesn't affect existing columns."""
+        order = BoardOrder.default()
+        order.columns["todo"].append("task.md")
+
+        order.ensure_column("todo")
+
+        assert order.columns["todo"] == ["task.md"]
