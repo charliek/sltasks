@@ -25,3 +25,8 @@ dev = [
     "pytest>=8.0.0",
     "textual-dev>=1.8.0",
 ]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.14",
+    "pymdown-extensions>=10.15",
+]

@@ -11,3 +11,6 @@ wheels/
 
 # claude local
 .claude/settings.local.json
+
+# Documentation build
+site-build/
