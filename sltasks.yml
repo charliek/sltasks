@@ -1,0 +1,30 @@
+# sltasks Board Configuration
+#
+# task_root: Relative path to directory containing task files
+#
+# Column constraints:
+#   - Minimum 2 columns, maximum 6 columns
+#   - Column IDs must be lowercase with underscores only
+#   - 'archived' is reserved and cannot be used as a column ID
+#
+# Example custom columns:
+#   columns:
+#     - id: backlog
+#       title: "Backlog"
+#     - id: in_progress
+#       title: "In Progress"
+#     - id: review
+#       title: "Code Review"
+#     - id: done
+#       title: "Done"
+
+version: 1
+task_root: .tasks
+board:
+  columns:
+  - id: todo
+    title: To Do
+  - id: in_progress
+    title: In Progress
+  - id: done
+    title: Done
