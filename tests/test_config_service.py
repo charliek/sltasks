@@ -7,31 +7,80 @@ from sltasks.services import ConfigService
 
 
 @pytest.fixture
-def task_dir(tmp_path: Path) -> Path:
-    """Create a temporary task directory."""
-    task_root = tmp_path / ".tasks"
-    task_root.mkdir()
-    return task_root
+def project_dir(tmp_path: Path) -> Path:
+    """Create a temporary project directory."""
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    return project_root
 
 
 class TestConfigServiceLoading:
     """Tests for ConfigService file loading."""
 
-    def test_default_on_missing_file(self, task_dir: Path):
+    def test_default_on_missing_file(self, project_dir: Path):
         """Missing sltasks.yml returns default config."""
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
         assert config.board.column_ids == ["todo", "in_progress", "done"]
+        assert config.task_root == ".tasks"
         assert not service.has_config_error
 
-    def test_load_valid_two_column_config(self, task_dir: Path):
-        """Valid 2-column config loads correctly."""
-        config_file = task_dir / "sltasks.yml"
+    def test_task_root_property(self, project_dir: Path):
+        """task_root property returns computed path."""
+        service = ConfigService(project_dir)
+
+        assert service.task_root == project_dir / ".tasks"
+
+    def test_task_root_with_custom_value(self, project_dir: Path):
+        """task_root property uses config value."""
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             """
 version: 1
+task_root: my-custom-tasks
+board:
+  columns:
+    - id: todo
+      title: "To Do"
+    - id: done
+      title: "Done"
+"""
+        )
+
+        service = ConfigService(project_dir)
+
+        assert service.task_root == project_dir / "my-custom-tasks"
+
+    def test_task_root_with_dot(self, project_dir: Path):
+        """task_root '.' means same as project_root."""
+        config_file = project_dir / "sltasks.yml"
+        config_file.write_text(
+            """
+version: 1
+task_root: "."
+board:
+  columns:
+    - id: todo
+      title: "To Do"
+    - id: done
+      title: "Done"
+"""
+        )
+
+        service = ConfigService(project_dir)
+
+        assert service.task_root == project_dir / "."
+        assert service.task_root.resolve() == project_dir.resolve()
+
+    def test_load_valid_two_column_config(self, project_dir: Path):
+        """Valid 2-column config loads correctly."""
+        config_file = project_dir / "sltasks.yml"
+        config_file.write_text(
+            """
+version: 1
+task_root: .tasks
 board:
   columns:
     - id: backlog
@@ -41,19 +90,20 @@ board:
 """
         )
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 2
         assert config.board.column_ids == ["backlog", "done"]
         assert not service.has_config_error
 
-    def test_load_valid_five_column_config(self, task_dir: Path):
+    def test_load_valid_five_column_config(self, project_dir: Path):
         """Valid 5-column config loads correctly."""
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             """
 version: 1
+task_root: .tasks
 board:
   columns:
     - id: backlog
@@ -69,7 +119,7 @@ board:
 """
         )
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 5
@@ -82,9 +132,9 @@ board:
         ]
         assert not service.has_config_error
 
-    def test_get_board_config_convenience(self, task_dir: Path):
+    def test_get_board_config_convenience(self, project_dir: Path):
         """get_board_config returns board config directly."""
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         board_config = service.get_board_config()
 
         assert board_config.column_ids == ["todo", "in_progress", "done"]
@@ -93,36 +143,37 @@ board:
 class TestConfigServiceFallback:
     """Tests for ConfigService fallback behavior."""
 
-    def test_fallback_on_empty_file(self, task_dir: Path):
+    def test_fallback_on_empty_file(self, project_dir: Path):
         """Empty file falls back to defaults."""
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text("")
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
         assert service.has_config_error
         assert "empty" in service.config_error.lower()
 
-    def test_fallback_on_invalid_yaml(self, task_dir: Path):
+    def test_fallback_on_invalid_yaml(self, project_dir: Path):
         """Invalid YAML falls back to defaults."""
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text("invalid: yaml: syntax: :")
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
         assert service.has_config_error
         assert "yaml" in service.config_error.lower()
 
-    def test_fallback_on_validation_error_too_few_columns(self, task_dir: Path):
+    def test_fallback_on_validation_error_too_few_columns(self, project_dir: Path):
         """Too few columns falls back to defaults."""
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             """
 version: 1
+task_root: .tasks
 board:
   columns:
     - id: only
@@ -130,39 +181,41 @@ board:
 """
         )
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
         assert service.has_config_error
 
-    def test_fallback_on_validation_error_too_many_columns(self, task_dir: Path):
+    def test_fallback_on_validation_error_too_many_columns(self, project_dir: Path):
         """Too many columns falls back to defaults."""
         columns_yaml = "\n".join(
             [f"    - id: col{i}\n      title: 'Column {i}'" for i in range(7)]
         )
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             f"""
 version: 1
+task_root: .tasks
 board:
   columns:
 {columns_yaml}
 """
         )
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
         assert service.has_config_error
 
-    def test_fallback_on_duplicate_ids(self, task_dir: Path):
+    def test_fallback_on_duplicate_ids(self, project_dir: Path):
         """Duplicate IDs falls back to defaults."""
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             """
 version: 1
+task_root: .tasks
 board:
   columns:
     - id: todo
@@ -174,18 +227,19 @@ board:
 """
         )
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
         assert service.has_config_error
 
-    def test_fallback_on_archived_column_id(self, task_dir: Path):
+    def test_fallback_on_archived_column_id(self, project_dir: Path):
         """'archived' as column ID falls back to defaults."""
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             """
 version: 1
+task_root: .tasks
 board:
   columns:
     - id: todo
@@ -197,7 +251,7 @@ board:
 """
         )
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
@@ -208,18 +262,18 @@ board:
 class TestConfigServiceCaching:
     """Tests for ConfigService caching behavior."""
 
-    def test_config_is_cached(self, task_dir: Path):
+    def test_config_is_cached(self, project_dir: Path):
         """Config is cached between calls."""
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
 
         config1 = service.get_config()
         config2 = service.get_config()
 
         assert config1 is config2
 
-    def test_reload_clears_cache(self, task_dir: Path):
+    def test_reload_clears_cache(self, project_dir: Path):
         """reload() clears cached config."""
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
 
         config1 = service.get_config()
         service.reload()
@@ -227,19 +281,20 @@ class TestConfigServiceCaching:
 
         assert config1 is not config2
 
-    def test_reload_picks_up_new_config(self, task_dir: Path):
+    def test_reload_picks_up_new_config(self, project_dir: Path):
         """reload() picks up changes to config file."""
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
 
         # First load - defaults
         config1 = service.get_config()
         assert len(config1.board.columns) == 3
 
         # Create config file
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             """
 version: 1
+task_root: .tasks
 board:
   columns:
     - id: a
@@ -258,13 +313,14 @@ board:
         config3 = service.get_config()
         assert len(config3.board.columns) == 2
 
-    def test_reload_clears_error(self, task_dir: Path):
+    def test_reload_clears_error(self, project_dir: Path):
         """reload() clears previous error state."""
         # Create invalid config (only one column - validation error)
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             """
 version: 1
+task_root: .tasks
 board:
   columns:
     - id: only
@@ -272,7 +328,7 @@ board:
 """
         )
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         service.get_config()
         assert service.has_config_error
 
@@ -280,6 +336,7 @@ board:
         config_file.write_text(
             """
 version: 1
+task_root: .tasks
 board:
   columns:
     - id: todo
@@ -307,23 +364,23 @@ class TestConfigServiceEdgeCases:
         assert len(config.board.columns) == 3
         assert not service.has_config_error
 
-    def test_config_file_is_directory(self, task_dir: Path):
+    def test_config_file_is_directory(self, project_dir: Path):
         """Config path being a directory falls back to defaults."""
-        config_path = task_dir / "sltasks.yml"
+        config_path = project_dir / "sltasks.yml"
         config_path.mkdir()  # Create as directory instead of file
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3
         assert service.has_config_error
 
-    def test_whitespace_only_file(self, task_dir: Path):
+    def test_whitespace_only_file(self, project_dir: Path):
         """Whitespace-only file falls back to defaults."""
-        config_file = task_dir / "sltasks.yml"
+        config_file = project_dir / "sltasks.yml"
         config_file.write_text("   \n\n   \n")
 
-        service = ConfigService(task_dir)
+        service = ConfigService(project_dir)
         config = service.get_config()
 
         assert len(config.board.columns) == 3

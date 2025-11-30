@@ -15,15 +15,21 @@ class ConfigService:
 
     CONFIG_FILE = "sltasks.yml"
 
-    def __init__(self, task_root: Path) -> None:
+    def __init__(self, project_root: Path) -> None:
         """Initialize the config service.
 
         Args:
-            task_root: Path to the .tasks directory
+            project_root: Path to project root containing sltasks.yml
         """
-        self.task_root = task_root
+        self.project_root = project_root
         self._config: SltasksConfig | None = None
         self._config_error: str | None = None
+
+    @property
+    def task_root(self) -> Path:
+        """Get the computed task root directory."""
+        config = self.get_config()
+        return self.project_root / config.task_root
 
     @property
     def has_config_error(self) -> bool:
@@ -52,7 +58,7 @@ class ConfigService:
 
     def _load_config(self) -> SltasksConfig:
         """Load configuration from file or return default."""
-        config_path = self.task_root / self.CONFIG_FILE
+        config_path = self.project_root / self.CONFIG_FILE
         self._config_error = None
 
         if not config_path.exists():

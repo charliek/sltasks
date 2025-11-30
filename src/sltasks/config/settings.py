@@ -10,9 +10,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings."""
 
-    task_root: Path = Field(
-        default=Path(".tasks"),
-        description="Path to tasks directory",
+    project_root: Path = Field(
+        default=Path("."),
+        description="Path to project root containing sltasks.yml",
     )
 
     editor: str = Field(

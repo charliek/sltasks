@@ -6,9 +6,11 @@ import sys
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
 BLUE = "\033[34m"
+RED = "\033[31m"
 RESET = "\033[0m"
 CHECK = "\u2713"  # ✓
 BULLET = "\u2022"  # •
+CROSS = "\u2717"  # ✗
 
 
 def _supports_color() -> bool:
@@ -41,3 +43,9 @@ def info(message: str) -> None:
 def header(message: str) -> None:
     """Print header message in blue."""
     print(_colorize(message, BLUE))
+
+
+def error(message: str) -> None:
+    """Print error message with red cross."""
+    cross = _colorize(CROSS, RED)
+    print(f"{cross} {message}")

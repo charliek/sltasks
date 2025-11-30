@@ -1,5 +1,7 @@
 """Configuration models for sltasks.yml."""
 
+from pathlib import Path
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -75,7 +77,23 @@ class SltasksConfig(BaseModel):
     """Root configuration from sltasks.yml."""
 
     version: int = 1
+    task_root: str = Field(default=".tasks", description="Relative path to tasks directory")
     board: BoardConfig = Field(default_factory=BoardConfig.default)
+
+    @field_validator("task_root")
+    @classmethod
+    def validate_task_root(cls, v: str) -> str:
+        """Validate task_root is a relative path."""
+        path = Path(v)
+        if path.is_absolute():
+            raise ValueError("task_root must be a relative path")
+        # Check for path traversal attempts (e.g., "../other")
+        try:
+            resolved = Path(".").resolve() / path
+            resolved.resolve().relative_to(Path(".").resolve())
+        except ValueError:
+            raise ValueError("task_root must be within the project directory")
+        return v
 
     @classmethod
     def default(cls) -> "SltasksConfig":

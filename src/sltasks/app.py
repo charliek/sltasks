@@ -69,8 +69,10 @@ class SltasksApp(App):
 
     def _init_services(self) -> None:
         """Initialize repository and services."""
-        self.config_service = ConfigService(self.settings.task_root)
-        self.repository = FilesystemRepository(self.settings.task_root, self.config_service)
+        self.config_service = ConfigService(self.settings.project_root)
+        # Get task_root from config service (computed from project_root + config.task_root)
+        task_root = self.config_service.task_root
+        self.repository = FilesystemRepository(task_root, self.config_service)
         self.task_service = TaskService(self.repository, self.config_service)
         self.board_service = BoardService(self.repository, self.config_service)
         self.filter_service = FilterService()

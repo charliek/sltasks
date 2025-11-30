@@ -18,13 +18,16 @@
 #       title: "Done"
 
 version: 1
+
+task_root: "."
+
 board:
   columns:
-  - id: todo
-    title: To Do
-  - id: in_progress
-    title: In Progress
-  - id: code_review
-    title: Code Review
-  - id: done
-    title: Done
+    - id: todo
+      title: To Do
+    - id: in_progress
+      title: In Progress
+    - id: code_review
+      title: Code Review
+    - id: done
+      title: Done

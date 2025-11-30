@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
         "--task-root",
         type=Path,
         default=None,
-        help="Path to tasks directory (default: .tasks/)",
+        help="Path to project root containing sltasks.yml (default: current directory)",
     )
     parser.add_argument(
         "--generate",
@@ -38,7 +38,7 @@ def main() -> None:
     # Build settings from CLI args
     settings_kwargs: dict = {}
     if args.task_root:
-        settings_kwargs["task_root"] = args.task_root
+        settings_kwargs["project_root"] = args.task_root
 
     settings = Settings(**settings_kwargs)
 
@@ -46,7 +46,7 @@ def main() -> None:
     if args.generate:
         from .cli.generate import run_generate
 
-        exit_code = run_generate(settings.task_root)
+        exit_code = run_generate(settings.project_root)
         raise SystemExit(exit_code)
 
     # Import here to avoid circular imports

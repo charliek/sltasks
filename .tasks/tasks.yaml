@@ -3,10 +3,10 @@ version: 1
 columns:
   todo:
   - add-dark-mode.md
-  - fix-login-bug.md
+  - setup-ci.md
   in_progress:
   - refactor-api.md
   done:
   - write-docs.md
-  - setup-ci.md
+  - fix-login-bug.md
   archived: []

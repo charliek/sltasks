@@ -218,3 +218,35 @@ class TestSltasksConfig:
         data = {"version": 1}
         config = SltasksConfig(**data)
         assert len(config.board.columns) == 3  # Default
+
+    def test_default_task_root(self):
+        """Default config has task_root of '.tasks'."""
+        config = SltasksConfig.default()
+        assert config.task_root == ".tasks"
+
+    def test_custom_task_root(self):
+        """Custom task_root is accepted."""
+        config = SltasksConfig(task_root="my-tasks")
+        assert config.task_root == "my-tasks"
+
+    def test_task_root_dot_valid(self):
+        """task_root '.' is valid (same directory)."""
+        config = SltasksConfig(task_root=".")
+        assert config.task_root == "."
+
+    def test_task_root_nested_valid(self):
+        """Nested relative task_root is valid."""
+        config = SltasksConfig(task_root="sub/dir/tasks")
+        assert config.task_root == "sub/dir/tasks"
+
+    def test_task_root_absolute_invalid(self):
+        """Absolute path for task_root is rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            SltasksConfig(task_root="/absolute/path")
+        assert "relative" in str(exc_info.value).lower()
+
+    def test_task_root_parent_traversal_invalid(self):
+        """task_root with parent traversal is rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            SltasksConfig(task_root="../other")
+        assert "within" in str(exc_info.value).lower()

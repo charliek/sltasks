@@ -1,10 +1,12 @@
 ---
-title: "Setup CI/CD pipeline"
-state: done
+title: Setup CI/CD pipeline
+state: todo
 priority: low
-tags: [devops, infrastructure]
-created: 2024-12-15T08:00:00Z
-updated: 2024-12-20T17:00:00Z
+tags:
+- devops
+- infrastructure
+created: '2024-12-15T08:00:00+00:00'
+updated: '2025-11-30T00:36:56.348249+00:00'
 ---
 
 ## Description
