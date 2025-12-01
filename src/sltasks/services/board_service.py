@@ -52,7 +52,11 @@ class BoardService:
         if task is None:
             return None
 
-        task.state = to_state
+        # Resolve alias to canonical ID
+        config = self._get_board_config()
+        canonical_state = config.resolve_status(to_state)
+
+        task.state = canonical_state
         task.updated = now_utc()
 
         # Save updates the file and yaml

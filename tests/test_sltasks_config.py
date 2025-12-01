@@ -59,6 +59,35 @@ class TestColumnConfig:
         with pytest.raises(ValidationError):
             ColumnConfig(id="todo", title="")
 
+    def test_valid_aliases(self):
+        """Valid aliases are accepted."""
+        col = ColumnConfig(
+            id="todo", title="To Do", status_alias=["new", "fresh_start"]
+        )
+        assert col.status_alias == ["new", "fresh_start"]
+
+    def test_alias_normalization(self):
+        """Aliases are validated but not transformed (case sensitivity checked by validator)."""
+        col = ColumnConfig(id="done", title="Done", status_alias=["finished"])
+        assert col.status_alias[0] == "finished"
+
+    def test_invalid_alias_uppercase(self):
+        """Uppercase alias is rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            ColumnConfig(id="todo", title="To Do", status_alias=["New"])
+        assert "lowercase" in str(exc_info.value).lower()
+
+    def test_invalid_alias_starts_with_number(self):
+        """Alias starting with number is rejected."""
+        with pytest.raises(ValidationError) as exc_info:
+            ColumnConfig(id="todo", title="To Do", status_alias=["1st"])
+        assert "letter" in str(exc_info.value).lower()
+
+    def test_invalid_alias_empty(self):
+        """Empty alias string is rejected."""
+        with pytest.raises(ValidationError):
+            ColumnConfig(id="todo", title="To Do", status_alias=[""])
+
 
 class TestBoardConfig:
     """Tests for BoardConfig model."""
@@ -75,6 +104,18 @@ class TestBoardConfig:
         assert config.get_title("todo") == "To Do"
         assert config.get_title("in_progress") == "In Progress"
         assert config.get_title("done") == "Done"
+
+    def test_default_aliases(self):
+        """Default config includes expected aliases."""
+        config = BoardConfig.default()
+        todo = next(c for c in config.columns if c.id == "todo")
+        done = next(c for c in config.columns if c.id == "done")
+        in_progress = next(c for c in config.columns if c.id == "in_progress")
+
+        assert "new" in todo.status_alias
+        assert "completed" in done.status_alias
+        assert "finished" in done.status_alias
+        assert not in_progress.status_alias
 
     def test_min_columns_two(self):
         """Two columns is valid (minimum)."""
@@ -128,6 +169,39 @@ class TestBoardConfig:
         assert "archived" in str(exc_info.value).lower()
         assert "reserved" in str(exc_info.value).lower()
 
+    def test_alias_conflict_with_id(self):
+        """Alias cannot be same as a column ID."""
+        with pytest.raises(ValidationError) as exc_info:
+            BoardConfig(
+                columns=[
+                    ColumnConfig(id="todo", title="To Do", status_alias=["done"]),
+                    ColumnConfig(id="done", title="Done"),
+                ]
+            )
+        assert "conflicts" in str(exc_info.value).lower()
+
+    def test_alias_duplicate_across_columns(self):
+        """Same alias cannot be used in multiple columns."""
+        with pytest.raises(ValidationError) as exc_info:
+            BoardConfig(
+                columns=[
+                    ColumnConfig(id="todo", title="To Do", status_alias=["dupe"]),
+                    ColumnConfig(id="done", title="Done", status_alias=["dupe"]),
+                ]
+            )
+        assert "duplicate" in str(exc_info.value).lower()
+
+    def test_alias_archived_reserved(self):
+        """'archived' cannot be used as an alias."""
+        with pytest.raises(ValidationError) as exc_info:
+            BoardConfig(
+                columns=[
+                    ColumnConfig(id="todo", title="To Do", status_alias=["archived"]),
+                    ColumnConfig(id="done", title="Done"),
+                ]
+            )
+        assert "reserved" in str(exc_info.value).lower()
+
     def test_get_title_known_column(self):
         """get_title returns correct title for known column."""
         config = BoardConfig.default()
@@ -145,6 +219,12 @@ class TestBoardConfig:
         assert config.is_valid_status("in_progress") is True
         assert config.is_valid_status("done") is True
 
+    def test_is_valid_status_alias(self):
+        """is_valid_status returns True for alias."""
+        config = BoardConfig.default()
+        assert config.is_valid_status("new") is True
+        assert config.is_valid_status("completed") is True
+
     def test_is_valid_status_archived(self):
         """is_valid_status returns True for 'archived' (always valid)."""
         config = BoardConfig.default()
@@ -155,6 +235,43 @@ class TestBoardConfig:
         config = BoardConfig.default()
         assert config.is_valid_status("unknown") is False
         assert config.is_valid_status("review") is False
+
+    def test_resolve_status_id(self):
+        """resolve_status returns ID unchanged if it matches a column."""
+        config = BoardConfig.default()
+        assert config.resolve_status("todo") == "todo"
+
+    def test_resolve_status_alias(self):
+        """resolve_status returns primary ID for alias."""
+        config = BoardConfig.default()
+        assert config.resolve_status("new") == "todo"
+        assert config.resolve_status("finished") == "done"
+
+    def test_resolve_status_unknown(self):
+        """resolve_status returns unknown status unchanged."""
+        config = BoardConfig.default()
+        assert config.resolve_status("unknown") == "unknown"
+
+    def test_get_column_for_status_id(self):
+        """get_column_for_status returns ID for column ID."""
+        config = BoardConfig.default()
+        assert config.get_column_for_status("todo") == "todo"
+
+    def test_get_column_for_status_alias(self):
+        """get_column_for_status returns ID for alias."""
+        config = BoardConfig.default()
+        assert config.get_column_for_status("new") == "todo"
+        assert config.get_column_for_status("completed") == "done"
+
+    def test_get_column_for_status_archived(self):
+        """get_column_for_status returns 'archived' for archived status."""
+        config = BoardConfig.default()
+        assert config.get_column_for_status("archived") == "archived"
+
+    def test_get_column_for_status_unknown(self):
+        """get_column_for_status returns None for unknown status."""
+        config = BoardConfig.default()
+        assert config.get_column_for_status("unknown") is None
 
     def test_column_ids_property(self):
         """column_ids returns IDs in order."""

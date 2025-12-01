@@ -49,6 +49,10 @@ class TaskService:
         """
         if state is None:
             state = self._get_default_state()
+        elif self._config_service:
+            # Resolve alias to canonical ID
+            config = self._config_service.get_board_config()
+            state = config.resolve_status(state)
 
         filename = generate_filename(title)
 

@@ -165,12 +165,21 @@ class FilesystemRepository:
         """Parse a single task file."""
         try:
             post = frontmatter.load(filepath)
-            return Task.from_frontmatter(
+            task = Task.from_frontmatter(
                 filename=filepath.name,
                 metadata=post.metadata,
                 body=post.content,
                 filepath=filepath,
             )
+
+            # Normalize alias states to canonical column IDs
+            config = self._get_board_config()
+            canonical_state = config.resolve_status(task.state)
+            if canonical_state != task.state:
+                # We don't save immediately - file keeps alias until next save
+                task.state = canonical_state
+
+            return task
         except Exception:
             # Skip files that can't be parsed
             # TODO: Consider logging this

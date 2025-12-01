@@ -125,10 +125,11 @@ class Board(BaseModel):
 
         # Sort tasks into columns
         for task in tasks:
-            if task.state in board.columns:
-                board.columns[task.state].append(task)
-            elif task.state == STATE_ARCHIVED:
-                board.columns[STATE_ARCHIVED].append(task)
+            # Resolve status to canonical column ID (handles aliases)
+            column_id = config.get_column_for_status(task.state)
+
+            if column_id is not None and column_id in board.columns:
+                board.columns[column_id].append(task)
             else:
                 # Unknown state - place in first column
                 unknown_states.add(task.state)

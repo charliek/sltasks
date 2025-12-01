@@ -295,3 +295,15 @@ class TestReload:
         repo.reload()
         tasks2 = repo.get_all()
         assert len(tasks2) == 2
+
+    def test_reload_handles_alias_normalization(
+        self, task_dir: Path, repo: FilesystemRepository
+    ):
+        """Tasks with alias states are normalized on load."""
+        (task_dir / "alias.md").write_text("---\nstate: new\n---\n")
+
+        repo.reload()
+        task = repo.get_by_id("alias.md")
+
+        assert task is not None
+        assert task.state == STATE_TODO  # Normalized from 'new'

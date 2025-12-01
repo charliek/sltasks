@@ -22,16 +22,23 @@ CONFIG_HEADER = """\
 #   - Column IDs must be lowercase with underscores only
 #   - 'archived' is reserved and cannot be used as a column ID
 #
+# Status Aliases:
+#   - Optional list of alternative status values mapping to column ID
+#   - Useful for mapping existing file states or synonyms
+#
 # Example custom columns:
 #   columns:
 #     - id: backlog
 #       title: "Backlog"
+#       status_alias:
+#         - pending
 #     - id: in_progress
 #       title: "In Progress"
-#     - id: review
-#       title: "Code Review"
 #     - id: done
 #       title: "Done"
+#       status_alias:
+#         - completed
+#         - finished
 
 """
 
@@ -78,6 +85,13 @@ def generate_config_yaml(task_root: str = ".tasks") -> str:
     # Use model_dump() to get dict, then serialize to YAML
     config_dict = config.model_dump()
     config_dict["task_root"] = task_root  # Use provided task_root
+
+    # Clean up empty status_alias fields
+    if "board" in config_dict and "columns" in config_dict["board"]:
+        for col in config_dict["board"]["columns"]:
+            if "status_alias" in col and not col["status_alias"]:
+                del col["status_alias"]
+
     yaml_content = yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
     return CONFIG_HEADER + yaml_content
 
