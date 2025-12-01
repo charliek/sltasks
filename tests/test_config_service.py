@@ -139,6 +139,38 @@ board:
 
         assert board_config.column_ids == ["todo", "in_progress", "done"]
 
+    def test_load_config_with_aliases(self, project_dir: Path):
+        """Config with status aliases loads correctly."""
+        config_file = project_dir / "sltasks.yml"
+        config_file.write_text(
+            """
+version: 1
+task_root: .tasks
+board:
+  columns:
+    - id: todo
+      title: "To Do"
+      status_alias:
+        - new
+        - fresh
+    - id: done
+      title: "Done"
+      status_alias:
+        - completed
+"""
+        )
+
+        service = ConfigService(project_dir)
+        config = service.get_config()
+
+        todo = next(c for c in config.board.columns if c.id == "todo")
+        done = next(c for c in config.board.columns if c.id == "done")
+
+        assert "new" in todo.status_alias
+        assert "fresh" in todo.status_alias
+        assert "completed" in done.status_alias
+        assert not service.has_config_error
+
 
 class TestConfigServiceFallback:
     """Tests for ConfigService fallback behavior."""
