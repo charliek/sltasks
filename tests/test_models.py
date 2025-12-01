@@ -239,6 +239,28 @@ class TestBoardDynamicColumns:
         assert visible[0] == ("a", "Column A", board.get_column("a"))
         assert visible[1] == ("b", "Column B", board.get_column("b"))
 
+    def test_tasks_with_alias_states(self):
+        """Tasks with alias states are placed in correct column."""
+        config = BoardConfig(
+            columns=[
+                ColumnConfig(id="todo", title="To Do", status_alias=["new"]),
+                ColumnConfig(id="done", title="Done", status_alias=["finished"]),
+            ]
+        )
+        tasks = [
+            Task(filename="1.md", state="new"),
+            Task(filename="2.md", state="finished"),
+            Task(filename="3.md", state="todo"),
+        ]
+
+        board = Board.from_tasks(tasks, config)
+
+        assert len(board.get_column("todo")) == 2
+        assert len(board.get_column("done")) == 1
+
+        todo_files = sorted([t.filename for t in board.get_column("todo")])
+        assert todo_files == ["1.md", "3.md"]
+
 
 class TestBoardOrderDynamic:
     """Tests for BoardOrder with dynamic columns."""

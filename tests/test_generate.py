@@ -60,6 +60,24 @@ class TestGenerateConfigYaml:
             assert col["id"] == default.board.columns[i].id
             assert col["title"] == default.board.columns[i].title
 
+    def test_generated_includes_status_alias(self):
+        """Generated config includes status_alias where defined."""
+        import yaml
+
+        content = generate_config_yaml()
+        parsed = yaml.safe_load(content)
+        columns = parsed["board"]["columns"]
+
+        todo = next(c for c in columns if c["id"] == "todo")
+        done = next(c for c in columns if c["id"] == "done")
+        in_progress = next(c for c in columns if c["id"] == "in_progress")
+
+        assert "status_alias" in todo
+        assert "new" in todo["status_alias"]
+        assert "status_alias" in done
+        assert "completed" in done["status_alias"]
+        assert "status_alias" not in in_progress  # Should be omitted if empty
+
 
 class TestIsValidTaskRoot:
     """Tests for _is_valid_task_root validation."""

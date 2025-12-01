@@ -82,6 +82,21 @@ class TestBoardServiceMoveTask:
         reloaded = repo.get_by_id("task.md")
         assert reloaded.state == STATE_IN_PROGRESS
 
+    def test_move_task_with_alias_updates_to_canonical(
+        self, board_service: BoardService, task_dir: Path, repo: FilesystemRepository
+    ):
+        """move_task with alias updates to canonical state."""
+        create_task_file(task_dir, "task.md", "todo")
+
+        # 'completed' is alias for 'done' in default config
+        result = board_service.move_task("task.md", "completed")
+
+        assert result is not None
+        assert result.state == STATE_DONE
+
+        reloaded = repo.get_by_id("task.md")
+        assert reloaded.state == STATE_DONE
+
     def test_move_task_left_from_in_progress(
         self, board_service: BoardService, task_dir: Path
     ):
