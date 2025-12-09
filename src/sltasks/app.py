@@ -6,9 +6,21 @@ from textual.screen import ModalScreen
 
 from .config import Settings
 from .repositories import FilesystemRepository
-from .services import BoardService, ConfigService, FilterService, TaskService
+from .services import (
+    BoardService,
+    ConfigService,
+    FilterService,
+    TaskService,
+    TemplateService,
+)
 from .ui.screens.board import BoardScreen
-from .ui.widgets import CommandBar, ConfirmModal, HelpScreen, TaskPreviewModal
+from .ui.widgets import (
+    CommandBar,
+    ConfirmModal,
+    HelpScreen,
+    TaskPreviewModal,
+    TypeSelectorModal,
+)
 
 
 class SltasksApp(App):
@@ -73,7 +85,10 @@ class SltasksApp(App):
         # Get task_root from config service (computed from project_root + config.task_root)
         task_root = self.config_service.task_root
         self.repository = FilesystemRepository(task_root, self.config_service)
-        self.task_service = TaskService(self.repository, self.config_service)
+        self.template_service = TemplateService(self.config_service)
+        self.task_service = TaskService(
+            self.repository, self.config_service, self.template_service
+        )
         self.board_service = BoardService(self.repository, self.config_service)
         self.filter_service = FilterService()
 
@@ -133,7 +148,30 @@ class SltasksApp(App):
 
     # Task actions
     def action_new_task(self) -> None:
-        """Create a new task."""
+        """Create a new task - shows type selector if types configured."""
+        screen = self.screen
+        if not isinstance(screen, BoardScreen):
+            return
+
+        # Check if types are configured
+        config = self.config_service.get_board_config()
+        if config.types:
+            # Show type selector modal
+            self.push_screen(
+                TypeSelectorModal(config.types),
+                callback=self._handle_type_selection,
+            )
+        else:
+            # No types configured - create task directly
+            self._create_task_with_type(None)
+
+    def _handle_type_selection(self, selected_type: str | None) -> None:
+        """Handle type selection from modal."""
+        # Create task with selected type (None if user cancelled or chose no type)
+        self._create_task_with_type(selected_type)
+
+    def _create_task_with_type(self, task_type: str | None) -> None:
+        """Create task with optional type."""
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -142,6 +180,7 @@ class SltasksApp(App):
         task = self.task_service.create_task(
             title="New Task",
             state=screen.current_column_state,
+            task_type=task_type,
         )
 
         original_filename = task.filename

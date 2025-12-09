@@ -26,6 +26,7 @@ class Task(BaseModel):
     state: str = STATE_TODO  # Now a string to support custom states
     priority: Priority = Priority.MEDIUM
     tags: list[str] = Field(default_factory=list)
+    type: str | None = None  # Task type (feature, bug, task, etc.)
     created: datetime | None = None
     updated: datetime | None = None
 
@@ -48,6 +49,8 @@ class Task(BaseModel):
         data["priority"] = self.priority.value
         if self.tags:
             data["tags"] = self.tags
+        if self.type:
+            data["type"] = self.type
         if self.created:
             data["created"] = self.created.isoformat()
         if self.updated:
@@ -70,6 +73,7 @@ class Task(BaseModel):
             state=metadata.get("state", STATE_TODO),
             priority=Priority(metadata.get("priority", "medium")),
             tags=metadata.get("tags", []),
+            type=metadata.get("type"),
             created=_parse_datetime(metadata.get("created")),
             updated=_parse_datetime(metadata.get("updated")),
             body=body,

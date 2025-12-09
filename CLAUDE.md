@@ -55,21 +55,23 @@ CLI (__main__.py) → App (app.py) → Services → Repository → Filesystem
   - `TaskService`: CRUD operations on tasks, opens external editor
   - `BoardService`: Board state management, task movement between columns
   - `FilterService`: Parses filter expressions, applies filters to task lists
+  - `TemplateService`: Loads task templates, merges template frontmatter with new tasks
 - **Repository Layer** (`repositories/filesystem.py`): File I/O, manages task files and `tasks.yaml` ordering
 - **UI Layer** (`ui/`): Textual screens and widgets
 
 ### Data Flow
 
-1. Tasks stored as `.md` files with YAML front matter (title, state, priority, tags, created, updated)
+1. Tasks stored as `.md` files with YAML front matter (title, state, priority, type, tags, created, updated)
 2. Task ordering maintained in `tasks.yaml` (auto-generated, keyed by column)
-3. Board configuration in `sltasks.yml` at project root defines columns (2-6 custom columns)
-4. Files are source of truth for task state; YAML provides ordering within columns
+3. Board configuration in `sltasks.yml` at project root defines columns (2-6 custom columns) and types
+4. Templates in `{task_root}/templates/` provide default content for new tasks
+5. Files are source of truth for task state; YAML provides ordering within columns
 
 ### Key Models
 
-- `Task`: Pydantic model with frontmatter fields and body content
+- `Task`: Pydantic model with frontmatter fields (title, state, priority, type, tags) and body content
 - `Board`/`BoardOrder`: Board state with tasks grouped by column
-- `SltasksConfig`/`BoardConfig`/`ColumnConfig`: Configuration hierarchy from `sltasks.yml`
+- `SltasksConfig`/`BoardConfig`/`ColumnConfig`/`TypeConfig`: Configuration hierarchy from `sltasks.yml`
 
 ### Task File Format
 
@@ -78,6 +80,7 @@ CLI (__main__.py) → App (app.py) → Services → Repository → Filesystem
 title: Task title
 state: todo          # Column ID (e.g., todo, in_progress, done, or custom)
 priority: medium     # low, medium, high, critical
+type: feature        # Task type (feature, bug, task, or custom)
 tags:
 - tag1
 created: '2025-01-01T12:00:00+00:00'
@@ -86,6 +89,13 @@ updated: '2025-01-01T12:00:00+00:00'
 
 Markdown body content here.
 ```
+
+### Task Types
+
+Types are configured in `sltasks.yml` under `board.types`:
+- Each type has `id`, optional `template`, `color`, and optional `type_alias`
+- Templates in `{task_root}/templates/` provide default body content and frontmatter
+- Default types: feature (blue), bug (red), task (white)
 
 ### Custom Columns
 

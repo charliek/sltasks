@@ -107,10 +107,21 @@ class KanbanColumn(Widget):
             state_name = self.state.replace("_", " ")
             await content.mount(EmptyColumnMessage(f"No {state_name} tasks"))
         else:
+            # Get board config for type lookups
+            board_config = None
+            if hasattr(self.app, "config_service"):
+                board_config = self.app.config_service.get_board_config()
+
             for task in self._tasks:
                 # Remove .md extension for valid Textual ID
                 task_id = task.filename.replace(".md", "")
-                card = TaskCard(task, id=f"task-{task_id}")
+
+                # Get type config if task has a type
+                type_config = None
+                if task.type and board_config:
+                    type_config = board_config.get_type(task.type)
+
+                card = TaskCard(task, type_config=type_config, id=f"task-{task_id}")
                 await content.mount(card)
 
         # Update header count

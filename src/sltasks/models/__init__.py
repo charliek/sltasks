@@ -2,7 +2,7 @@
 
 from .board import Board, BoardOrder
 from .enums import Priority
-from .sltasks_config import BoardConfig, ColumnConfig, SltasksConfig
+from .sltasks_config import BoardConfig, ColumnConfig, SltasksConfig, TypeConfig
 from .task import (
     STATE_ARCHIVED,
     STATE_DONE,
@@ -23,4 +23,5 @@ __all__ = [
     "STATE_IN_PROGRESS",
     "STATE_TODO",
     "Task",
+    "TypeConfig",
 ]

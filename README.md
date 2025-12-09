@@ -101,8 +101,8 @@ Tasks are stored as Markdown files with YAML front matter in `.tasks/`:
 title: Fix login timeout bug
 state: todo
 priority: high
+type: bug
 tags:
-- bug
 - backend
 created: '2025-01-01T12:00:00+00:00'
 updated: '2025-01-02T14:00:00+00:00'
@@ -122,29 +122,9 @@ All front matter fields are optional. Files without front matter use defaults.
 
 ## Configuration
 
-Create `sltasks.yml` in your project root to customize columns:
+Create `sltasks.yml` in your project root to customize columns and task types:
 
 ```yaml
-# sltasks Board Configuration
-#
-# task_root: Relative path to directory containing task files
-#
-# Column constraints:
-#   - Minimum 2 columns, maximum 6 columns
-#   - Column IDs must be lowercase with underscores only
-#   - 'archived' is reserved and cannot be used as a column ID
-#
-# Example custom columns:
-#   columns:
-#     - id: backlog
-#       title: "Backlog"
-#     - id: in_progress
-#       title: "In Progress"
-#     - id: review
-#       title: "Code Review"
-#     - id: done
-#       title: "Done"
-
 version: 1
 task_root: .tasks
 board:
@@ -155,12 +135,26 @@ board:
     title: In Progress
   - id: done
     title: Done
+  types:
+  - id: feature
+    color: blue
+  - id: bug
+    color: red
+    type_alias:
+    - defect
+  - id: task
+    color: white
 ```
 
-**Constraints:**
+**Column constraints:**
 - 2-6 columns allowed
 - Column IDs must be lowercase alphanumeric with underscores
 - `archived` is reserved (always available but not shown as a column)
+
+**Task types:**
+- Types categorize tasks with colored display and optional templates
+- Templates in `{task_root}/templates/` provide default content for new tasks
+- Run `sltasks --generate` to create default templates
 
 ## Filtering
 

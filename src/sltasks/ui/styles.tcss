@@ -83,7 +83,26 @@ TaskCard:focus {
     width: 100%;
 }
 
+/* Task meta line (priority + type) */
+.task-meta {
+    height: 1;
+    width: 100%;
+}
+
+.task-meta .task-priority {
+    width: 1fr;
+}
+
+.task-meta .task-type {
+    width: auto;
+    text-align: right;
+}
+
 .task-priority {
+    height: 1;
+}
+
+.task-type {
     height: 1;
 }
 
