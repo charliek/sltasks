@@ -33,7 +33,7 @@ class TaskCard(Widget, can_focus=True):
         self._type_config = type_config
 
     @property
-    def task(self) -> Task:
+    def task(self) -> Task:  # pyrefly: ignore[bad-override]
         """Get the task for this card."""
         return self._task_data
 

@@ -1,11 +1,11 @@
 """Utilities for datetime handling."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def now_utc() -> datetime:
     """Get current UTC datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def to_iso(dt: datetime) -> str:

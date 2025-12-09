@@ -252,10 +252,7 @@ class BoardConfig(BaseModel):
         """Check if type_value is a valid type ID or alias."""
         if type_value in self.type_ids:
             return True
-        for t in self.types:
-            if type_value in t.type_alias:
-                return True
-        return False
+        return any(type_value in t.type_alias for t in self.types)
 
     @classmethod
     def default(cls) -> "BoardConfig":
@@ -294,10 +291,10 @@ class SltasksConfig(BaseModel):
             raise ValueError("task_root must be a relative path")
         # Check for path traversal attempts (e.g., "../other")
         try:
-            resolved = Path(".").resolve() / path
-            resolved.resolve().relative_to(Path(".").resolve())
-        except ValueError:
-            raise ValueError("task_root must be within the project directory")
+            resolved = Path().resolve() / path
+            resolved.resolve().relative_to(Path().resolve())
+        except ValueError as err:
+            raise ValueError("task_root must be within the project directory") from err
         return v
 
     @classmethod

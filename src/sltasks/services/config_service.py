@@ -66,7 +66,7 @@ class ConfigService:
             return SltasksConfig.default()
 
         try:
-            with open(config_path) as f:
+            with config_path.open() as f:
                 data = yaml.safe_load(f)
 
             if data is None:
@@ -75,9 +75,7 @@ class ConfigService:
                 return SltasksConfig.default()
 
             config = SltasksConfig(**data)
-            logger.info(
-                f"Loaded {self.CONFIG_FILE} with {len(config.board.columns)} columns"
-            )
+            logger.info(f"Loaded {self.CONFIG_FILE} with {len(config.board.columns)} columns")
             return config
 
         except yaml.YAMLError as e:

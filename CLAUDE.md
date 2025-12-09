@@ -36,6 +36,15 @@ uv run mkdocs build -d site-build
 
 # Serve documentation locally
 uv run mkdocs serve
+
+# Linting
+./scripts/lint.sh                  # Run all lint checks
+uv run ruff check .                # Lint check
+uv run ruff format --check .       # Format check
+uv run pyrefly check               # Type check
+uv run ruff check . --fix          # Auto-fix lint issues
+uv run ruff format .               # Auto-format code
+uv run pre-commit run --all-files  # Run pre-commit hooks
 ```
 
 ## Architecture
@@ -146,3 +155,10 @@ Columns are configured in `sltasks.yml`:
 - **No abstract base classes**: Direct implementation without ABC interfaces (YAGNI until multiple backends needed)
 - **String-based states**: `Task.state` is a string, not an enum, to support custom columns
 - **No backwards compatibility shims**: Early project, remove deprecated code rather than maintain it
+
+## Code Style
+
+- Python 3.13+ with type hints
+- Ruff for linting and formatting (100 char line length)
+- Pyrefly for type checking
+- Pre-commit hooks enforce style on commit

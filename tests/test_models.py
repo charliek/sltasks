@@ -1,15 +1,15 @@
 """Unit tests for model edge cases."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sltasks.models import Task, Priority, Board, BoardOrder
-from sltasks.models import BoardConfig, ColumnConfig
+import pytest
+
+from sltasks.models import Board, BoardConfig, BoardOrder, ColumnConfig, Priority, Task
 from sltasks.models.task import (
-    STATE_TODO,
-    STATE_IN_PROGRESS,
-    STATE_DONE,
     STATE_ARCHIVED,
+    STATE_DONE,
+    STATE_IN_PROGRESS,
+    STATE_TODO,
     _parse_datetime,
 )
 
@@ -103,7 +103,7 @@ class TestParseDatetime:
 
     def test_parse_datetime_passthrough(self):
         """Already datetime objects pass through unchanged."""
-        dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = _parse_datetime(dt)
 
         assert result is dt

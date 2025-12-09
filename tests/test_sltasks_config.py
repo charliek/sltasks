@@ -61,9 +61,7 @@ class TestColumnConfig:
 
     def test_valid_aliases(self):
         """Valid aliases are accepted."""
-        col = ColumnConfig(
-            id="todo", title="To Do", status_alias=["new", "fresh_start"]
-        )
+        col = ColumnConfig(id="todo", title="To Do", status_alias=["new", "fresh_start"])
         assert col.status_alias == ["new", "fresh_start"]
 
     def test_alias_normalization(self):

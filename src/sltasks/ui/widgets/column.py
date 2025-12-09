@@ -76,7 +76,7 @@ class KanbanColumn(Widget):
     def on_mount(self) -> None:
         """Refresh tasks when column is mounted."""
         if self._tasks:
-            self._refresh_tasks()
+            self.call_after_refresh(self._refresh_tasks)
 
     @property
     def _header_text(self) -> str:

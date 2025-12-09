@@ -56,7 +56,7 @@ class TemplateService:
             return None
 
         try:
-            post = frontmatter.load(template_file)
+            post = frontmatter.load(template_file)  # pyrefly: ignore[bad-argument-type]
             return dict(post.metadata), post.content
         except Exception as e:
             logger.warning(f"Failed to load template {template_file}: {e}")

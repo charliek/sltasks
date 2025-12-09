@@ -1,13 +1,12 @@
 """Tests for generate command."""
 
-import pytest
 from pathlib import Path
 
 from sltasks.cli.generate import (
-    run_generate,
-    generate_config_yaml,
-    _is_valid_task_root,
     CONFIG_FILE,
+    _is_valid_task_root,
+    generate_config_yaml,
+    run_generate,
 )
 
 
@@ -47,6 +46,7 @@ class TestGenerateConfigYaml:
     def test_matches_default_config(self):
         """Generated config matches SltasksConfig.default()."""
         import yaml
+
         from sltasks.models import SltasksConfig
 
         content = generate_config_yaml()
@@ -199,8 +199,8 @@ class TestRunGenerate:
 
     def test_generated_matches_model_default(self, tmp_path: Path):
         """Generated config matches SltasksConfig.default()."""
-        from sltasks.services import ConfigService
         from sltasks.models import SltasksConfig
+        from sltasks.services import ConfigService
 
         project_root = tmp_path / "project"
         project_root.mkdir()

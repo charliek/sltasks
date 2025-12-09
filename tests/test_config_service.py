@@ -1,7 +1,8 @@
 """Tests for ConfigService."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from sltasks.services import ConfigService
 
@@ -221,9 +222,7 @@ board:
 
     def test_fallback_on_validation_error_too_many_columns(self, project_dir: Path):
         """Too many columns falls back to defaults."""
-        columns_yaml = "\n".join(
-            [f"    - id: col{i}\n      title: 'Column {i}'" for i in range(7)]
-        )
+        columns_yaml = "\n".join([f"    - id: col{i}\n      title: 'Column {i}'" for i in range(7)])
         config_file = project_dir / "sltasks.yml"
         config_file.write_text(
             f"""

@@ -1,7 +1,8 @@
 """Tests for TemplateService."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from sltasks.services import ConfigService, TemplateService
 
@@ -140,9 +141,7 @@ class TestTemplateServiceApplyTemplate:
         # Body from template
         assert "## Description" in body
 
-    def test_apply_template_base_overrides_template(
-        self, template_service: TemplateService
-    ):
+    def test_apply_template_base_overrides_template(self, template_service: TemplateService):
         """Base frontmatter values override template values."""
         base_fm = {
             "title": "My Task",

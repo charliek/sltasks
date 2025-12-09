@@ -1,12 +1,13 @@
 """Edge case tests for Phase 6 - config errors and unknown states."""
 
-import pytest
 from pathlib import Path
 
-from sltasks.models import Board, BoardConfig, ColumnConfig, Task
+import pytest
+
+from sltasks.models import Board, BoardConfig, Task
 from sltasks.models.task import STATE_ARCHIVED
 from sltasks.repositories import FilesystemRepository
-from sltasks.services import ConfigService, FilterService, TaskService, BoardService
+from sltasks.services import BoardService, ConfigService, FilterService, TaskService
 
 
 @pytest.fixture
@@ -68,10 +69,7 @@ board:
 
     def test_too_many_columns(self, task_dir: Path):
         """More than 6 columns fails validation."""
-        columns = "\n".join([
-            f"    - id: col{i}\n      title: 'Column {i}'"
-            for i in range(7)
-        ])
+        columns = "\n".join([f"    - id: col{i}\n      title: 'Column {i}'" for i in range(7)])
         (task_dir / "sltasks.yml").write_text(f"""
 version: 1
 board:

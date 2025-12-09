@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
 import frontmatter
 import yaml
@@ -25,9 +26,7 @@ class FilesystemRepository:
 
     TASKS_YAML = "tasks.yaml"
 
-    def __init__(
-        self, task_root: Path, config_service: ConfigService | None = None
-    ) -> None:
+    def __init__(self, task_root: Path, config_service: ConfigService | None = None) -> None:
         """
         Initialize repository.
 
@@ -83,7 +82,7 @@ class FilesystemRepository:
         post.metadata = task.to_frontmatter()
 
         # Write file (sort_keys=False preserves original key order)
-        with open(filepath, "w") as f:
+        with filepath.open("w") as f:
             f.write(frontmatter.dumps(post, sort_keys=False))
 
         # Update board order
@@ -158,13 +157,12 @@ class FilesystemRepository:
 
     def _iter_task_files(self) -> Iterator[Path]:
         """Iterate over all .md files in the task root."""
-        for filepath in self.task_root.glob("*.md"):
-            yield filepath
+        yield from self.task_root.glob("*.md")
 
     def _parse_task_file(self, filepath: Path) -> Task | None:
         """Parse a single task file."""
         try:
-            post = frontmatter.load(filepath)
+            post = frontmatter.load(filepath)  # pyrefly: ignore[bad-argument-type]
             task = Task.from_frontmatter(
                 filename=filepath.name,
                 metadata=post.metadata,
@@ -192,7 +190,7 @@ class FilesystemRepository:
 
         yaml_path = self.task_root / self.TASKS_YAML
         if yaml_path.exists():
-            with open(yaml_path) as f:
+            with yaml_path.open() as f:
                 data = yaml.safe_load(f) or {}
             self._board_order = BoardOrder(**data)
         else:
@@ -221,7 +219,7 @@ class FilesystemRepository:
         yaml_path = self.task_root / self.TASKS_YAML
 
         data = self._board_order.model_dump()
-        with open(yaml_path, "w") as f:
+        with yaml_path.open("w") as f:
             f.write("# Auto-generated - do not edit manually\n")
             yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
 
@@ -266,9 +264,7 @@ class FilesystemRepository:
                 # Check if in wrong column (file state takes precedence)
                 current_column = self._find_task_column(filename)
                 if current_column and current_column != state_value:
-                    self._board_order.move_task(
-                        filename, current_column, state_value
-                    )
+                    self._board_order.move_task(filename, current_column, state_value)
                     modified = True
 
         if modified:
