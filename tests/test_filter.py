@@ -30,6 +30,7 @@ class TestFilterParsing:
         assert f.exclude_tags == []
         assert f.states == []
         assert f.priorities == []
+        assert f.types == []
         assert f.show_archived is False
 
     def test_free_text(self, filter_service: FilterService):
@@ -100,6 +101,16 @@ class TestFilterParsing:
         f = filter_service.parse("archived:false")
         assert f.show_archived is False
 
+    def test_type_filter(self, filter_service: FilterService):
+        """type:value is parsed correctly."""
+        f = filter_service.parse("type:bug")
+        assert f.types == ["bug"]
+
+    def test_multiple_types(self, filter_service: FilterService):
+        """Multiple type: expressions are collected."""
+        f = filter_service.parse("type:bug type:feature")
+        assert f.types == ["bug", "feature"]
+
     def test_complex_expression(self, filter_service: FilterService):
         """Complex expressions with multiple types."""
         f = filter_service.parse("login tag:bug priority:high state:todo -tag:wontfix")
@@ -130,6 +141,7 @@ class TestFilterApplication:
                 state=STATE_TODO,
                 priority=Priority.HIGH,
                 tags=["bug", "auth"],
+                type="bug",
                 body="Users can't login",
             ),
             Task(
@@ -138,6 +150,7 @@ class TestFilterApplication:
                 state=STATE_IN_PROGRESS,
                 priority=Priority.MEDIUM,
                 tags=["feature", "ui"],
+                type="feature",
                 body="Implement dark theme",
             ),
             Task(
@@ -146,6 +159,7 @@ class TestFilterApplication:
                 state=STATE_TODO,
                 priority=Priority.CRITICAL,
                 tags=["bug", "critical"],
+                type="bug",
                 body="App crashes immediately",
             ),
             Task(
@@ -154,6 +168,7 @@ class TestFilterApplication:
                 state=STATE_DONE,
                 priority=Priority.LOW,
                 tags=["devops"],
+                type="task",
                 body="Configure GitHub Actions",
             ),
             Task(
@@ -162,7 +177,17 @@ class TestFilterApplication:
                 state=STATE_ARCHIVED,
                 priority=Priority.MEDIUM,
                 tags=["feature"],
+                type="feature",
                 body="Deprecated feature",
+            ),
+            Task(
+                filename="notype1.md",
+                title="Task without type",
+                state=STATE_TODO,
+                priority=Priority.LOW,
+                tags=[],
+                type=None,
+                body="No type set",
             ),
         ]
 
@@ -172,7 +197,7 @@ class TestFilterApplication:
         """Empty filter returns all non-archived tasks."""
         f = Filter()
         result = filter_service.apply(sample_tasks, f)
-        assert len(result) == 4
+        assert len(result) == 5
         assert all(t.state != STATE_ARCHIVED for t in result)
 
     def test_show_archived(
@@ -181,7 +206,7 @@ class TestFilterApplication:
         """show_archived=True includes archived tasks."""
         f = Filter(show_archived=True)
         result = filter_service.apply(sample_tasks, f)
-        assert len(result) == 5
+        assert len(result) == 6
 
     def test_text_search_in_title(
         self, filter_service: FilterService, sample_tasks: list[Task]
@@ -244,7 +269,7 @@ class TestFilterApplication:
         """State filter matches tasks in that state."""
         f = Filter(states=[STATE_TODO])
         result = filter_service.apply(sample_tasks, f)
-        assert len(result) == 2
+        assert len(result) == 3
         assert all(t.state == STATE_TODO for t in result)
 
     def test_multiple_states_any_match(
@@ -253,7 +278,7 @@ class TestFilterApplication:
         """Multiple states match if ANY state matches."""
         f = Filter(states=[STATE_TODO, STATE_DONE])
         result = filter_service.apply(sample_tasks, f)
-        assert len(result) == 3
+        assert len(result) == 4
 
     def test_priority_filter(
         self, filter_service: FilterService, sample_tasks: list[Task]
@@ -280,3 +305,50 @@ class TestFilterApplication:
         f = Filter(tags=["nonexistent"])
         result = filter_service.apply(sample_tasks, f)
         assert result == []
+
+    def test_type_filter(
+        self, filter_service: FilterService, sample_tasks: list[Task]
+    ):
+        """Type filter matches tasks with that type."""
+        f = Filter(types=["bug"])
+        result = filter_service.apply(sample_tasks, f)
+        assert len(result) == 2
+        filenames = {t.filename for t in result}
+        assert filenames == {"bug1.md", "bug2.md"}
+
+    def test_multiple_types_any_match(
+        self, filter_service: FilterService, sample_tasks: list[Task]
+    ):
+        """Multiple types match if ANY type matches."""
+        f = Filter(types=["bug", "feature"])
+        result = filter_service.apply(sample_tasks, f)
+        assert len(result) == 3
+        filenames = {t.filename for t in result}
+        assert filenames == {"bug1.md", "bug2.md", "feature1.md"}
+
+    def test_type_filter_no_type(
+        self, filter_service: FilterService, sample_tasks: list[Task]
+    ):
+        """Tasks without type don't match type filter."""
+        f = Filter(types=["bug"])
+        result = filter_service.apply(sample_tasks, f)
+        assert "notype1.md" not in {t.filename for t in result}
+
+    def test_combined_type_and_other_filters(
+        self, filter_service: FilterService, sample_tasks: list[Task]
+    ):
+        """Type filter combined with other filters (AND)."""
+        f = Filter(types=["bug"], priorities=[Priority.HIGH])
+        result = filter_service.apply(sample_tasks, f)
+        assert len(result) == 1
+        assert result[0].filename == "bug1.md"
+
+    def test_type_filter_case_insensitive(
+        self, filter_service: FilterService, sample_tasks: list[Task]
+    ):
+        """Type filter is case insensitive."""
+        f = filter_service.parse("type:BUG")
+        result = filter_service.apply(sample_tasks, f)
+        assert len(result) == 2
+        filenames = {t.filename for t in result}
+        assert filenames == {"bug1.md", "bug2.md"}

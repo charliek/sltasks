@@ -166,8 +166,11 @@ tag:backend             # Tasks with "backend" tag
 -tag:wontfix            # Exclude "wontfix" tag
 state:in_progress       # Tasks in specific column
 priority:high           # Filter by priority (low/medium/high/critical)
+type:bug                # Filter by task type
+type:bug type:feature   # Tasks with type "bug" OR "feature"
 archived:true           # Show archived tasks
 tag:bug priority:high   # Combine multiple filters (AND)
+type:bug priority:high  # Bugs with high priority
 ```
 
 Press `Escape` to clear the filter.
