@@ -16,6 +16,7 @@ class Filter:
     exclude_tags: list[str] = field(default_factory=list)  # -tag:value
     states: list[str] = field(default_factory=list)  # state:value (any string)
     priorities: list[Priority] = field(default_factory=list)  # priority:value
+    types: list[str] = field(default_factory=list)  # type:value
     show_archived: bool = False  # archived:true
 
 
@@ -23,7 +24,7 @@ class FilterService:
     """Service for parsing and applying filters to tasks."""
 
     # Pattern for key:value tokens
-    TOKEN_PATTERN = re.compile(r"(-?)(?:(tag|state|priority|archived):)?(\S+)")
+    TOKEN_PATTERN = re.compile(r"(-?)(?:(tag|state|priority|archived|type):)?(\S+)")
 
     def parse(self, expression: str) -> Filter:
         """
@@ -35,6 +36,7 @@ class FilterService:
         - -tag:value: exclude tag
         - state:todo/in_progress/done/archived
         - priority:low/medium/high/critical
+        - type:feature/bug/task (or custom type)
         - archived:true - show archived tasks
 
         Multiple conditions are ANDed together.
@@ -70,6 +72,9 @@ class FilterService:
 
             elif key == "archived":
                 f.show_archived = value == "true"
+
+            elif key == "type":
+                f.types.append(value)
 
         if text_parts:
             f.text = " ".join(text_parts)
@@ -120,6 +125,12 @@ class FilterService:
         # Priority filter (any match)
         if f.priorities:
             if task.priority not in f.priorities:
+                return False
+
+        # Type filter (any match)
+        if f.types:
+            task_type = (task.type or "").lower()
+            if task_type not in f.types:
                 return False
 
         return True

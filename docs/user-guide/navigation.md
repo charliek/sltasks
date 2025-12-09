@@ -47,6 +47,8 @@ Press `/` to filter tasks:
 tag:bug           # Tasks with "bug" tag
 priority:high     # High priority tasks
 state:todo        # Tasks in "to do" state
+type:bug          # Tasks with "bug" type
+type:feature      # Tasks with "feature" type
 login             # Text search
 -tag:wontfix      # Exclude tasks with tag
 ```
@@ -55,6 +57,7 @@ Combine filters with spaces (AND logic):
 
 ```
 tag:bug priority:high state:todo
+type:bug priority:high           # High priority bugs
 ```
 
 Press `Escape` to clear the filter.
