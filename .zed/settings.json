@@ -1,0 +1,23 @@
+{
+  "languages": {
+    "Python": {
+      "language_servers": ["pyrefly", "ruff", "!basedpyright", "..."],
+      "formatter": {
+        "external": {
+          "command": "ruff",
+          "arguments": ["format", "--stdin-filename", "{buffer_path}", "-"]
+        }
+      },
+      "format_on_save": "on"
+    }
+  },
+  "lsp": {
+    "ruff": {
+      "initialization_options": {
+        "settings": {
+          "lineLength": 100
+        }
+      }
+    }
+  }
+}

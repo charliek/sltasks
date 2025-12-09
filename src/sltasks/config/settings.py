@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings."""
 
     project_root: Path = Field(
-        default=Path("."),
+        default=Path(),
         description="Path to project root containing sltasks.yml",
     )
 

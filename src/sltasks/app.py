@@ -86,9 +86,7 @@ class SltasksApp(App):
         task_root = self.config_service.task_root
         self.repository = FilesystemRepository(task_root, self.config_service)
         self.template_service = TemplateService(self.config_service)
-        self.task_service = TaskService(
-            self.repository, self.config_service, self.template_service
-        )
+        self.task_service = TaskService(self.repository, self.config_service, self.template_service)
         self.board_service = BoardService(self.repository, self.config_service)
         self.filter_service = FilterService()
 
@@ -226,7 +224,7 @@ class SltasksApp(App):
         if task is None:
             return
 
-        self.push_screen(
+        self.push_screen(  # pyrefly: ignore[no-matching-overload]
             TaskPreviewModal(task),
             callback=self._handle_preview_result,
         )
@@ -337,7 +335,7 @@ class SltasksApp(App):
             return
 
         # Show confirmation modal
-        self.push_screen(
+        self.push_screen(  # pyrefly: ignore[no-matching-overload]
             ConfirmModal(f"Delete '{task.display_title}'?"),
             callback=self._handle_delete_confirm,
         )

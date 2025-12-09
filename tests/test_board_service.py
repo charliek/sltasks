@@ -1,9 +1,9 @@
 """Integration tests for BoardService."""
 
-import pytest
 from pathlib import Path
 
-from sltasks.models import Task, Priority
+import pytest
+
 from sltasks.models.task import (
     STATE_ARCHIVED,
     STATE_DONE,
@@ -45,9 +45,7 @@ def create_task_file(task_dir: Path, filename: str, state: str = "todo") -> None
 class TestBoardServiceLoad:
     """Tests for board loading."""
 
-    def test_load_board_groups_by_state(
-        self, board_service: BoardService, task_dir: Path
-    ):
+    def test_load_board_groups_by_state(self, board_service: BoardService, task_dir: Path):
         """load_board groups tasks into correct columns."""
         create_task_file(task_dir, "task1.md", "todo")
         create_task_file(task_dir, "task2.md", "in_progress")
@@ -97,9 +95,7 @@ class TestBoardServiceMoveTask:
         reloaded = repo.get_by_id("task.md")
         assert reloaded.state == STATE_DONE
 
-    def test_move_task_left_from_in_progress(
-        self, board_service: BoardService, task_dir: Path
-    ):
+    def test_move_task_left_from_in_progress(self, board_service: BoardService, task_dir: Path):
         """move_task_left moves in_progress to todo."""
         create_task_file(task_dir, "task.md", "in_progress")
 
@@ -108,9 +104,7 @@ class TestBoardServiceMoveTask:
         assert result is not None
         assert result.state == STATE_TODO
 
-    def test_move_task_left_from_todo_stays(
-        self, board_service: BoardService, task_dir: Path
-    ):
+    def test_move_task_left_from_todo_stays(self, board_service: BoardService, task_dir: Path):
         """move_task_left from todo stays at todo (boundary)."""
         create_task_file(task_dir, "task.md", "todo")
 
@@ -119,9 +113,7 @@ class TestBoardServiceMoveTask:
         assert result is not None
         assert result.state == STATE_TODO
 
-    def test_move_task_right_from_done_stays(
-        self, board_service: BoardService, task_dir: Path
-    ):
+    def test_move_task_right_from_done_stays(self, board_service: BoardService, task_dir: Path):
         """move_task_right from done stays at done (boundary)."""
         create_task_file(task_dir, "task.md", "done")
 
@@ -148,9 +140,7 @@ class TestBoardServiceMoveTask:
 class TestBoardServiceArchive:
     """Tests for archiving tasks."""
 
-    def test_archive_task_changes_state(
-        self, board_service: BoardService, task_dir: Path
-    ):
+    def test_archive_task_changes_state(self, board_service: BoardService, task_dir: Path):
         """archive_task moves task to archived state."""
         create_task_file(task_dir, "task.md", "todo")
 

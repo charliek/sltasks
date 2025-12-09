@@ -2,12 +2,13 @@
 version: 1
 columns:
   todo:
-  - add-dark-mode.md
   - test-bug.md
   - setup-ci.md
+  - another-new-bug.md
   in_progress:
+  - add-dark-mode.md
   - refactor-api.md
   done:
-  - write-docs.md
   - fix-login-bug.md
+  - write-docs.md
   archived: []

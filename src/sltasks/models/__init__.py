@@ -12,16 +12,16 @@ from .task import (
 )
 
 __all__ = [
+    "STATE_ARCHIVED",
+    "STATE_DONE",
+    "STATE_IN_PROGRESS",
+    "STATE_TODO",
     "Board",
     "BoardConfig",
     "BoardOrder",
     "ColumnConfig",
     "Priority",
     "SltasksConfig",
-    "STATE_ARCHIVED",
-    "STATE_DONE",
-    "STATE_IN_PROGRESS",
-    "STATE_TODO",
     "Task",
     "TypeConfig",
 ]

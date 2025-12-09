@@ -40,7 +40,7 @@ class BoardOrder(BaseModel):
         for col in config.columns:
             columns[col.id] = []
         columns["archived"] = []
-        return cls(columns=columns)
+        return cls(columns=columns)  # pyrefly: ignore[bad-argument-type]
 
     def ensure_column(self, column_id: str) -> None:
         """Ensure a column exists in the order."""
@@ -73,9 +73,7 @@ class BoardOrder(BaseModel):
             if filename in column:
                 column.remove(filename)
 
-    def move_task(
-        self, filename: str, from_state: str, to_state: str, position: int = -1
-    ) -> None:
+    def move_task(self, filename: str, _from_state: str, to_state: str, position: int = -1) -> None:
         """Move task between columns."""
         self.remove_task(filename)
         self.add_task(filename, to_state, position)
@@ -93,9 +91,7 @@ class Board(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     @classmethod
-    def from_tasks(
-        cls, tasks: list[Task], config: BoardConfig | None = None
-    ) -> Board:
+    def from_tasks(cls, tasks: list[Task], config: BoardConfig | None = None) -> Board:
         """
         Create Board from tasks, grouping by state.
 
@@ -138,9 +134,7 @@ class Board(BaseModel):
 
         # Log unknown states if any were found
         if unknown_states:
-            logger.warning(
-                f"Tasks with unknown states placed in first column: {unknown_states}"
-            )
+            logger.warning(f"Tasks with unknown states placed in first column: {unknown_states}")
 
         return board
 
@@ -163,8 +157,4 @@ class Board(BaseModel):
         if config is None:
             config = self._config or BC.default()
 
-        return [
-            (col.id, col.title, self.columns.get(col.id, []))
-            for col in config.columns
-        ]
-
+        return [(col.id, col.title, self.columns.get(col.id, [])) for col in config.columns]

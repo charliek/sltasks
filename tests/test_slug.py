@@ -1,7 +1,5 @@
 """Tests for slug generation utilities."""
 
-import pytest
-
 from sltasks.utils.slug import generate_filename, slugify
 
 

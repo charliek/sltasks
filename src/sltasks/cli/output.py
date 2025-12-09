@@ -16,9 +16,7 @@ CROSS = "\u2717"  # ✗
 def _supports_color() -> bool:
     """Check if terminal supports color output."""
     # Check if stdout is a TTY
-    if not hasattr(sys.stdout, "isatty") or not sys.stdout.isatty():
-        return False
-    return True
+    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
 
 def _colorize(text: str, color: str) -> str:

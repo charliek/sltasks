@@ -1,10 +1,11 @@
 """Integration tests for TaskService."""
 
-import pytest
 from pathlib import Path
 
-from sltasks.models import Task, Priority
-from sltasks.models.task import STATE_TODO, STATE_IN_PROGRESS
+import pytest
+
+from sltasks.models import Priority
+from sltasks.models.task import STATE_IN_PROGRESS, STATE_TODO
 from sltasks.repositories import FilesystemRepository
 from sltasks.services import TaskService
 

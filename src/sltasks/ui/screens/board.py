@@ -31,7 +31,7 @@ class BoardScreen(Screen):
     @property
     def board_config(self) -> BoardConfig:
         """Get board configuration from app."""
-        return self.app.config_service.get_board_config()
+        return self.app.config_service.get_board_config()  # pyrefly: ignore[missing-attribute]
 
     @property
     def column_ids(self) -> list[str]:
@@ -47,16 +47,15 @@ class BoardScreen(Screen):
         """Create the board layout with dynamic columns from config."""
         yield Header()
 
-        with Container(id="board-container"):
-            with Horizontal(id="columns"):
-                for col in self.board_config.columns:
-                    # Generate CSS-safe ID (replace underscores with hyphens)
-                    col_id = f"column-{col.id.replace('_', '-')}"
-                    yield KanbanColumn(
-                        title=col.title,
-                        state=col.id,
-                        id=col_id,
-                    )
+        with Container(id="board-container"), Horizontal(id="columns"):
+            for col in self.board_config.columns:
+                # Generate CSS-safe ID (replace underscores with hyphens)
+                col_id = f"column-{col.id.replace('_', '-')}"
+                yield KanbanColumn(
+                    title=col.title,
+                    state=col.id,
+                    id=col_id,
+                )
 
         yield Static("", id="filter-status", classes="filter-status-bar")
         yield CommandBar()
@@ -79,13 +78,15 @@ class BoardScreen(Screen):
 
     def load_tasks(self) -> None:
         """Load tasks from the board service and populate columns."""
-        board = self.app.board_service.load_board()
+        board = self.app.board_service.load_board()  # pyrefly: ignore[missing-attribute]
 
         # Populate each column using config
         for col_id, _title, tasks in board.get_visible_columns(self.board_config):
             # Apply filter if active
             if self._filter:
-                tasks = self.app.filter_service.apply(tasks, self._filter)
+                tasks = self.app.filter_service.apply(  # pyrefly: ignore[missing-attribute]
+                    tasks, self._filter
+                )
 
             widget_id = f"column-{col_id.replace('_', '-')}"
             try:
@@ -107,7 +108,7 @@ class BoardScreen(Screen):
         saved_task = self._current_task
 
         # Reload data
-        self.app.board_service.reload()
+        self.app.board_service.reload()  # pyrefly: ignore[missing-attribute]
         self.load_tasks()
 
         # Store focus target for deferred application
@@ -198,10 +199,7 @@ class BoardScreen(Screen):
         if column is None or column.task_count == 0:
             return
 
-        if index < 0:
-            index = column.task_count - 1
-        else:
-            index = min(index, column.task_count - 1)
+        index = column.task_count - 1 if index < 0 else min(index, column.task_count - 1)
 
         self._current_task = index
         self._update_focus()

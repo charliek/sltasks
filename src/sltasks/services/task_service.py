@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..models import Priority, Task
-from ..models.sltasks_config import BoardConfig
 from ..repositories import FilesystemRepository
 from ..utils import generate_filename, now_utc
 
@@ -90,10 +89,8 @@ class TaskService:
 
             # Use template defaults if not explicitly provided
             if priority is None and "priority" in merged_fm:
-                try:
+                with contextlib.suppress(ValueError):
                     final_priority = Priority(merged_fm["priority"])
-                except ValueError:
-                    pass  # Keep default if invalid
             if tags is None and "tags" in merged_fm:
                 final_tags = merged_fm.get("tags", [])
 
@@ -102,7 +99,7 @@ class TaskService:
             title=title,
             state=state,
             priority=final_priority,
-            tags=final_tags,
+            tags=final_tags,  # pyrefly: ignore[bad-argument-type]
             type=resolved_type,
             created=now,
             updated=now,
@@ -137,8 +134,8 @@ class TaskService:
         if task is None:
             return None
 
-        # Generate filename from current title
-        new_filename = generate_filename(task.title)
+        # Generate filename from current title (use display_title which never returns None)
+        new_filename = generate_filename(task.display_title)
 
         # If filename would be the same, nothing to do
         if new_filename == filename:
@@ -193,8 +190,9 @@ class TaskService:
         # Handle editors with arguments (e.g., "zed --wait", "code --wait")
         # Use shell=True to properly handle the command string
         import shlex
+
         editor_parts = shlex.split(editor)
-        editor_cmd = editor_parts + [str(task.filepath.absolute())]
+        editor_cmd = [*editor_parts, str(task.filepath.absolute())]
 
         try:
             result = subprocess.run(
@@ -209,6 +207,7 @@ class TaskService:
     def _command_exists(self, cmd: str) -> bool:
         """Check if a command exists in PATH."""
         import shutil
+
         return shutil.which(cmd) is not None
 
     def _unique_filename(self, filename: str) -> str:

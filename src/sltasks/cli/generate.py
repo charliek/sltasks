@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from ..models.sltasks_config import SltasksConfig
-from .output import success, info, error
+from .output import error, info, success
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +110,11 @@ def generate_config_yaml(task_root: str = ".tasks") -> str:
             if "type_alias" in type_cfg and not type_cfg["type_alias"]:
                 del type_cfg["type_alias"]
 
-    yaml_content = yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
-    return CONFIG_HEADER + yaml_content
+    # yaml.dump returns str when stream is None (which is our case)
+    yaml_content = yaml.dump(
+        config_dict, default_flow_style=False, sort_keys=False
+    )  # pyrefly: ignore[bad-assignment]
+    return CONFIG_HEADER + yaml_content  # pyrefly: ignore[unsupported-operation]
 
 
 def _copy_bundled_templates(task_root: Path) -> bool:
@@ -168,7 +171,7 @@ def run_generate(project_root: Path) -> int:
     if config_path.exists():
         info(f"Config exists: {config_path}")
         # Load existing config to get task_root
-        with open(config_path) as f:
+        with config_path.open() as f:
             data = yaml.safe_load(f) or {}
         task_root_name = data.get("task_root", ".tasks")
     else:

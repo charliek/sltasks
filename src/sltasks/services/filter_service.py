@@ -1,5 +1,6 @@
 """Service for parsing and applying filters to tasks."""
 
+import contextlib
 import re
 from dataclasses import dataclass, field
 
@@ -65,10 +66,8 @@ class FilterService:
                 f.states.append(value)
 
             elif key == "priority":
-                try:
+                with contextlib.suppress(ValueError):
                     f.priorities.append(Priority(value))
-                except ValueError:
-                    pass  # Invalid priority, ignore
 
             elif key == "archived":
                 f.show_archived = value == "true"
@@ -118,14 +117,12 @@ class FilterService:
                 return False
 
         # State filter (any match)
-        if f.states:
-            if task.state not in f.states:
-                return False
+        if f.states and task.state not in f.states:
+            return False
 
         # Priority filter (any match)
-        if f.priorities:
-            if task.priority not in f.priorities:
-                return False
+        if f.priorities and task.priority not in f.priorities:
+            return False
 
         # Type filter (any match)
         if f.types:

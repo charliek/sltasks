@@ -1,9 +1,10 @@
 """Integration tests for FilesystemRepository."""
 
-import pytest
 from pathlib import Path
 
-from sltasks.models import Task, Priority, BoardOrder
+import pytest
+
+from sltasks.models import BoardOrder, Priority, Task
 from sltasks.models.task import (
     STATE_DONE,
     STATE_IN_PROGRESS,
@@ -59,9 +60,7 @@ class TestFilesystemRepository:
         filenames = {t.filename for t in tasks}
         assert filenames == {"task1.md", "task2.md"}
 
-    def test_get_all_handles_minimal_frontmatter(
-        self, task_dir: Path, repo: FilesystemRepository
-    ):
+    def test_get_all_handles_minimal_frontmatter(self, task_dir: Path, repo: FilesystemRepository):
         """get_all handles files with no frontmatter."""
         (task_dir / "minimal.md").write_text("# Just a heading\n\nSome content.")
 
@@ -75,9 +74,7 @@ class TestFilesystemRepository:
 
     def test_get_by_id_returns_task(self, task_dir: Path, repo: FilesystemRepository):
         """get_by_id returns the task if it exists."""
-        (task_dir / "my-task.md").write_text(
-            "---\ntitle: My Task\nstate: done\n---\nContent"
-        )
+        (task_dir / "my-task.md").write_text("---\ntitle: My Task\nstate: done\n---\nContent")
 
         task = repo.get_by_id("my-task.md")
 
@@ -113,9 +110,7 @@ class TestFilesystemRepository:
         assert "priority: high" in content
         assert "Task description here." in content
 
-    def test_save_updates_existing_task(
-        self, repo: FilesystemRepository, task_dir: Path
-    ):
+    def test_save_updates_existing_task(self, repo: FilesystemRepository, task_dir: Path):  # noqa: ARG002
         """save updates an existing task file."""
         # Create initial task
         task = Task(
@@ -166,9 +161,7 @@ class TestBoardOrder:
         assert "task.md" in content
         assert "todo:" in content
 
-    def test_get_board_order_returns_order(
-        self, repo: FilesystemRepository, task_dir: Path
-    ):
+    def test_get_board_order_returns_order(self, repo: FilesystemRepository, task_dir: Path):  # noqa: ARG002
         """get_board_order returns the current ordering."""
         # Create tasks in different states
         repo.save(Task(filename="t1.md", state=STATE_TODO))
@@ -181,9 +174,7 @@ class TestBoardOrder:
         assert "t2.md" in order.columns["in_progress"]
         assert "t3.md" in order.columns["done"]
 
-    def test_save_board_order_persists(
-        self, repo: FilesystemRepository, task_dir: Path
-    ):
+    def test_save_board_order_persists(self, repo: FilesystemRepository, task_dir: Path):  # noqa: ARG002
         """save_board_order persists changes."""
         order = BoardOrder()
         order.add_task("a.md", "todo")
@@ -204,9 +195,7 @@ class TestReconciliation:
     def test_new_files_added_to_yaml(self, task_dir: Path, repo: FilesystemRepository):
         """Files not in yaml are added based on their state."""
         # Create a file directly (not through repo)
-        (task_dir / "new-file.md").write_text(
-            "---\nstate: in_progress\n---\nContent"
-        )
+        (task_dir / "new-file.md").write_text("---\nstate: in_progress\n---\nContent")
 
         tasks = repo.get_all()
 
@@ -214,9 +203,7 @@ class TestReconciliation:
         order = repo.get_board_order()
         assert "new-file.md" in order.columns["in_progress"]
 
-    def test_missing_files_removed_from_yaml(
-        self, task_dir: Path, repo: FilesystemRepository
-    ):
+    def test_missing_files_removed_from_yaml(self, task_dir: Path, repo: FilesystemRepository):  # noqa: ARG002
         """Files in yaml but not on disk are removed from yaml."""
         # Create a task through repo
         repo.save(Task(filename="exists.md", state=STATE_TODO))
@@ -228,36 +215,30 @@ class TestReconciliation:
 
         # Reload and reconcile
         repo.reload()
-        tasks = repo.get_all()
+        repo.get_all()  # Trigger reconciliation
 
         # ghost.md should be removed
         order = repo.get_board_order()
         assert "ghost.md" not in order.columns["todo"]
         assert "exists.md" in order.columns["todo"]
 
-    def test_file_state_takes_precedence(
-        self, task_dir: Path, repo: FilesystemRepository
-    ):
+    def test_file_state_takes_precedence(self, task_dir: Path, repo: FilesystemRepository):
         """If file state differs from yaml column, file wins."""
         # Create task as TODO
         repo.save(Task(filename="task.md", state=STATE_TODO))
 
         # Manually change the file to IN_PROGRESS
-        (task_dir / "task.md").write_text(
-            "---\nstate: in_progress\n---\nContent"
-        )
+        (task_dir / "task.md").write_text("---\nstate: in_progress\n---\nContent")
 
         # Reload and reconcile
         repo.reload()
-        tasks = repo.get_all()
+        repo.get_all()  # Trigger reconciliation
 
         order = repo.get_board_order()
         assert "task.md" not in order.columns["todo"]
         assert "task.md" in order.columns["in_progress"]
 
-    def test_tasks_sorted_by_board_order(
-        self, task_dir: Path, repo: FilesystemRepository
-    ):
+    def test_tasks_sorted_by_board_order(self, task_dir: Path, repo: FilesystemRepository):  # noqa: ARG002
         """get_all returns tasks sorted by board order position."""
         # Create tasks
         repo.save(Task(filename="c.md", state=STATE_TODO))
@@ -296,9 +277,7 @@ class TestReload:
         tasks2 = repo.get_all()
         assert len(tasks2) == 2
 
-    def test_reload_handles_alias_normalization(
-        self, task_dir: Path, repo: FilesystemRepository
-    ):
+    def test_reload_handles_alias_normalization(self, task_dir: Path, repo: FilesystemRepository):
         """Tasks with alias states are normalized on load."""
         (task_dir / "alias.md").write_text("---\nstate: new\n---\n")
 

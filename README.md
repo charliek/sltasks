@@ -30,6 +30,9 @@ uv run sltasks
 ## Development
 
 ```bash
+# Install dev dependencies
+uv sync --dev
+
 # Run the TUI application
 uv run sltasks
 
@@ -50,6 +53,34 @@ uv run mkdocs build -d site-build
 
 # Serve documentation locally
 uv run mkdocs serve
+```
+
+### Linting
+
+```bash
+# Run all lint checks
+./scripts/lint.sh
+
+# Individual commands
+uv run ruff check .          # Lint check
+uv run ruff format --check . # Format check
+uv run pyrefly check         # Type check
+
+# Auto-fix linting issues
+uv run ruff check . --fix
+
+# Auto-format code
+uv run ruff format .
+```
+
+### Pre-commit Hooks
+
+```bash
+# Install pre-commit hooks
+uv run pre-commit install
+
+# Run hooks manually
+uv run pre-commit run --all-files
 ```
 
 ## Quick Start
