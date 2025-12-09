@@ -132,7 +132,7 @@ class TestRunGenerate:
         assert (project_root / CONFIG_FILE).exists()
         assert (project_root / ".tasks").exists()
 
-    def test_skips_when_both_exist(self, tmp_path: Path):
+    def test_skips_when_all_exist(self, tmp_path: Path):
         """Generate returns 1 when nothing to do."""
         project_root = tmp_path / "project"
         project_root.mkdir()
@@ -140,6 +140,10 @@ class TestRunGenerate:
         (project_root / CONFIG_FILE).write_text("task_root: .tasks\nversion: 1\n")
         # Create task directory
         (project_root / ".tasks").mkdir()
+        # Create templates directory with a template file
+        templates_dir = project_root / ".tasks" / "templates"
+        templates_dir.mkdir()
+        (templates_dir / "task.md").write_text("# Task template\n")
 
         exit_code = run_generate(project_root)
 

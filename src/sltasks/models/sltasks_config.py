@@ -5,6 +5,36 @@ from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 
 
+def _validate_identifier(value: str, name: str = "ID") -> str:
+    """Validate an identifier is lowercase alphanumeric with underscores."""
+    if not value:
+        raise ValueError(f"{name} cannot be empty")
+    if not value[0].isalpha():
+        raise ValueError(f"{name} must start with a letter")
+    if not all(c.isalnum() or c == "_" for c in value):
+        raise ValueError(f"{name} must be alphanumeric with underscores only")
+    if value != value.lower():
+        raise ValueError(f"{name} must be lowercase")
+    return value
+
+
+def _validate_alias_list(aliases: list[str], alias_type: str = "Alias") -> list[str]:
+    """Validate a list of aliases follow identifier format rules."""
+    for alias in aliases:
+        if not alias:
+            raise ValueError(f"{alias_type} cannot be empty")
+        if not alias[0].isalpha():
+            raise ValueError(f"{alias_type} '{alias}' must start with a letter")
+        if not alias.islower():
+            raise ValueError(f"{alias_type} '{alias}' must be lowercase")
+        if not all(c.isalnum() or c == "_" for c in alias):
+            raise ValueError(
+                f"{alias_type} '{alias}' can only contain lowercase letters, "
+                "numbers, and underscores"
+            )
+    return aliases
+
+
 class ColumnConfig(BaseModel):
     """Configuration for a single board column."""
 
@@ -16,36 +46,58 @@ class ColumnConfig(BaseModel):
     @classmethod
     def validate_id(cls, v: str) -> str:
         """Validate column ID is lowercase with underscores only."""
-        if not v[0].isalpha():
-            raise ValueError("Column ID must start with a letter")
-        if not all(c.isalnum() or c == "_" for c in v):
-            raise ValueError("Column ID must be alphanumeric with underscores only")
-        if v != v.lower():
-            raise ValueError("Column ID must be lowercase")
-        return v
+        return _validate_identifier(v, "Column ID")
 
     @field_validator("status_alias")
     @classmethod
     def validate_aliases(cls, v: list[str]) -> list[str]:
         """Validate that aliases follow column ID format rules."""
-        for alias in v:
-            if not alias:
-                raise ValueError("Alias cannot be empty")
-            if not alias[0].isalpha():
-                raise ValueError(f"Alias '{alias}' must start with a letter")
-            if not alias.islower():
-                raise ValueError(f"Alias '{alias}' must be lowercase")
-            if not all(c.isalnum() or c == "_" for c in alias):
-                raise ValueError(
-                    f"Alias '{alias}' can only contain lowercase letters, numbers, and underscores"
-                )
+        return _validate_alias_list(v, "Alias")
+
+
+class TypeConfig(BaseModel):
+    """Configuration for a single task type."""
+
+    id: str = Field(..., min_length=1)
+    template: str | None = Field(default=None, description="Template filename")
+    color: str = Field(default="white", description="Named color or hex code")
+    type_alias: list[str] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        """Validate type ID is lowercase with underscores only."""
+        return _validate_identifier(v, "Type ID")
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: str) -> str:
+        """Validate color is a valid named color or hex code."""
+        if v.startswith("#"):
+            hex_part = v[1:]
+            if len(hex_part) not in (3, 6):
+                raise ValueError("Hex color must be 3 or 6 characters (e.g., #fff or #ffffff)")
+            if not all(c in "0123456789abcdefABCDEF" for c in hex_part):
+                raise ValueError("Invalid hex color code")
         return v
+
+    @field_validator("type_alias")
+    @classmethod
+    def validate_aliases(cls, v: list[str]) -> list[str]:
+        """Validate that type aliases follow identifier format rules."""
+        return _validate_alias_list(v, "Type alias")
+
+    @property
+    def template_filename(self) -> str:
+        """Get the template filename (defaults to {id}.md)."""
+        return self.template or f"{self.id}.md"
 
 
 class BoardConfig(BaseModel):
-    """Configuration for board columns."""
+    """Configuration for board columns and task types."""
 
     columns: list[ColumnConfig] = Field(..., min_length=2, max_length=6)
+    types: list[TypeConfig] = Field(default_factory=list)
 
     @field_validator("columns")
     @classmethod
@@ -81,10 +133,41 @@ class BoardConfig(BaseModel):
 
         return v
 
+    @field_validator("types")
+    @classmethod
+    def validate_types(cls, v: list[TypeConfig]) -> list[TypeConfig]:
+        """Validate type constraints."""
+        ids = [t.id for t in v]
+
+        # Check unique IDs
+        if len(ids) != len(set(ids)):
+            raise ValueError("Type IDs must be unique")
+
+        # Collect all type aliases
+        all_aliases: list[str] = []
+        for t in v:
+            all_aliases.extend(t.type_alias)
+
+        # Check no alias duplicates a type ID
+        for alias in all_aliases:
+            if alias in ids:
+                raise ValueError(f"Type alias '{alias}' conflicts with type ID")
+
+        # Check no alias duplicates another alias
+        if len(all_aliases) != len(set(all_aliases)):
+            raise ValueError("Duplicate type alias found")
+
+        return v
+
     @property
     def column_ids(self) -> list[str]:
         """List of column IDs in display order."""
         return [col.id for col in self.columns]
+
+    @property
+    def type_ids(self) -> list[str]:
+        """List of type IDs in display order."""
+        return [t.id for t in self.types]
 
     def get_title(self, column_id: str) -> str:
         """Get display title for a column ID."""
@@ -92,6 +175,13 @@ class BoardConfig(BaseModel):
             if col.id == column_id:
                 return col.title
         return column_id.replace("_", " ").title()
+
+    def get_type(self, type_id: str) -> TypeConfig | None:
+        """Get type config by ID."""
+        for t in self.types:
+            if t.id == type_id:
+                return t
+        return None
 
     def resolve_status(self, status: str) -> str:
         """
@@ -112,6 +202,26 @@ class BoardConfig(BaseModel):
 
         # Unknown status - return unchanged (let caller handle)
         return status
+
+    def resolve_type(self, type_value: str) -> str:
+        """
+        Resolve a type value to its canonical type ID.
+
+        If type_value matches a type ID, returns it unchanged.
+        If type_value matches an alias, returns the type's primary ID.
+        If type_value is unknown, returns it unchanged.
+        """
+        # Check if it's already a type ID
+        if type_value in self.type_ids:
+            return type_value
+
+        # Check if it's an alias
+        for t in self.types:
+            if type_value in t.type_alias:
+                return t.id
+
+        # Unknown type - return unchanged (let caller handle)
+        return type_value
 
     def get_column_for_status(self, status: str) -> str | None:
         """
@@ -138,9 +248,18 @@ class BoardConfig(BaseModel):
         """Check if status is valid (column ID, alias, or 'archived')."""
         return self.get_column_for_status(status) is not None
 
+    def is_valid_type(self, type_value: str) -> bool:
+        """Check if type_value is a valid type ID or alias."""
+        if type_value in self.type_ids:
+            return True
+        for t in self.types:
+            if type_value in t.type_alias:
+                return True
+        return False
+
     @classmethod
     def default(cls) -> "BoardConfig":
-        """Return default 3-column configuration."""
+        """Return default 3-column configuration with default types."""
         return cls(
             columns=[
                 ColumnConfig(id="todo", title="To Do", status_alias=["new"]),
@@ -150,7 +269,12 @@ class BoardConfig(BaseModel):
                     title="Done",
                     status_alias=["completed", "finished", "complete"],
                 ),
-            ]
+            ],
+            types=[
+                TypeConfig(id="feature", color="blue"),
+                TypeConfig(id="bug", color="red", type_alias=["defect", "issue"]),
+                TypeConfig(id="task", color="white", type_alias=["chore"]),
+            ],
         )
 
 

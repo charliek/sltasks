@@ -14,6 +14,7 @@ from ..utils import generate_filename, now_utc
 
 if TYPE_CHECKING:
     from .config_service import ConfigService
+    from .template_service import TemplateService
 
 
 class TaskService:
@@ -23,9 +24,11 @@ class TaskService:
         self,
         repository: FilesystemRepository,
         config_service: ConfigService | None = None,
+        template_service: TemplateService | None = None,
     ) -> None:
         self.repository = repository
         self._config_service = config_service
+        self._template_service = template_service
 
     def _get_default_state(self) -> str:
         """Get the default state for new tasks (first column)."""
@@ -38,14 +41,17 @@ class TaskService:
         self,
         title: str,
         state: str | None = None,
-        priority: Priority = Priority.MEDIUM,
+        priority: Priority | None = None,
         tags: list[str] | None = None,
+        task_type: str | None = None,
     ) -> Task:
         """
         Create a new task with the given title.
 
         Generates a filename from the title and creates the file.
         If state is not provided, uses first column from config.
+        If task_type is provided and a template exists, the template's
+        frontmatter provides defaults and body content.
         """
         if state is None:
             state = self._get_default_state()
@@ -54,21 +60,53 @@ class TaskService:
             config = self._config_service.get_board_config()
             state = config.resolve_status(state)
 
+        # Resolve type alias to canonical ID
+        resolved_type = task_type
+        if task_type and self._config_service:
+            config = self._config_service.get_board_config()
+            resolved_type = config.resolve_type(task_type)
+
         filename = generate_filename(title)
 
         # Handle filename collision
         filename = self._unique_filename(filename)
 
         now = now_utc()
+
+        # Base values (always set)
+        final_priority = priority if priority is not None else Priority.MEDIUM
+        final_tags = tags if tags is not None else []
+        body = ""
+
+        # Apply template if type provided and template service available
+        if resolved_type and self._template_service:
+            base_fm = {
+                "title": title,
+                "state": state,
+                "created": now.isoformat(),
+                "updated": now.isoformat(),
+            }
+            merged_fm, body = self._template_service.apply_template(resolved_type, base_fm)
+
+            # Use template defaults if not explicitly provided
+            if priority is None and "priority" in merged_fm:
+                try:
+                    final_priority = Priority(merged_fm["priority"])
+                except ValueError:
+                    pass  # Keep default if invalid
+            if tags is None and "tags" in merged_fm:
+                final_tags = merged_fm.get("tags", [])
+
         task = Task(
             filename=filename,
             title=title,
             state=state,
-            priority=priority,
-            tags=tags or [],
+            priority=final_priority,
+            tags=final_tags,
+            type=resolved_type,
             created=now,
             updated=now,
-            body="",
+            body=body,
         )
 
         return self.repository.save(task)

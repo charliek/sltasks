@@ -1,10 +1,14 @@
 """Task card widget."""
 
+from __future__ import annotations
+
 from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Static
 
 from ...models import Priority, Task
+from ...models.sltasks_config import TypeConfig
 
 
 class TaskCard(Widget, can_focus=True):
@@ -17,9 +21,16 @@ class TaskCard(Widget, can_focus=True):
         Priority.LOW: ("●", "green", "low"),
     }
 
-    def __init__(self, task_data: Task, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        task_data: Task,
+        type_config: TypeConfig | None = None,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._task_data = task_data
+        self._type_config = type_config
 
     @property
     def task(self) -> Task:
@@ -32,12 +43,18 @@ class TaskCard(Widget, can_focus=True):
         title = self._truncate(self._task_data.display_title, 40)
         yield Static(title, classes="task-title")
 
-        # Priority line
-        symbol, color, label = self.PRIORITY_DISPLAY.get(
-            self._task_data.priority, ("●", "white", "medium")
-        )
-        priority_text = f"[{color}]{symbol}[/] {label}"
-        yield Static(priority_text, classes="task-priority")
+        # Priority and type line
+        priority_text = self._format_priority()
+        type_text = self._format_type()
+
+        if type_text:
+            # Show both priority and type in a horizontal layout
+            with Horizontal(classes="task-meta"):
+                yield Static(priority_text, classes="task-priority")
+                yield Static(type_text, classes="task-type")
+        else:
+            # Just priority
+            yield Static(priority_text, classes="task-priority")
 
         # Tags as chips
         if self._task_data.tags:
@@ -48,6 +65,19 @@ class TaskCard(Widget, can_focus=True):
             preview = self._get_body_preview()
             if preview:
                 yield Static(preview, classes="task-preview")
+
+    def _format_priority(self) -> str:
+        """Format priority for display."""
+        symbol, color, label = self.PRIORITY_DISPLAY.get(
+            self._task_data.priority, ("●", "white", "medium")
+        )
+        return f"[{color}]{symbol}[/] {label}"
+
+    def _format_type(self) -> str:
+        """Format type for display. Returns empty string if no type."""
+        if not self._task_data.type or not self._type_config:
+            return ""
+        return f"[{self._type_config.color}]●[/] {self._task_data.type}"
 
     def _truncate(self, text: str, max_len: int) -> str:
         """Truncate text with ellipsis."""

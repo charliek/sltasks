@@ -91,6 +91,82 @@ columns:
     title: Published
 ```
 
+## Task Types
+
+Task types allow you to categorize tasks (e.g., feature, bug, task) with associated templates and visual styling.
+
+### Type configuration
+
+```yaml
+board:
+  columns:
+    # ... columns
+  types:
+    - id: feature
+      color: blue
+    - id: bug
+      color: red
+      type_alias:
+        - defect
+        - issue
+    - id: task
+      color: white
+      type_alias:
+        - chore
+```
+
+Each type has:
+
+| Property | Description |
+|----------|-------------|
+| `id` | Internal identifier used in task `type` field (lowercase, alphanumeric, underscores) |
+| `template` | Optional template filename (defaults to `{id}.md`) |
+| `color` | Display color - named color (blue, red, etc.) or hex code (#ff0000) |
+| `type_alias` | Optional list of alternative type values mapping to this type ID |
+
+### Templates
+
+Templates are stored in `{task_root}/templates/` and provide default content for new tasks. When you create a task with a type, the template's body content is used and its frontmatter fields (like `priority` and `tags`) become defaults.
+
+**Example template (`templates/bug.md`):**
+
+```markdown
+---
+priority: high
+tags: []
+---
+
+## Description
+
+[What is happening?]
+
+## Steps to Reproduce
+
+1. Step 1
+2. Step 2
+
+## Expected Behavior
+
+[What should happen]
+```
+
+When creating a new bug task, this template provides the body content and sets priority to `high` by default.
+
+### Type Aliases
+
+Type aliases work like status aliases - they map alternative type names to canonical type IDs. This is useful when:
+- You have existing files with different type names
+- You want to support synonyms (e.g., `defect` → `bug`)
+
+### Default types
+
+If no config file exists, these default types are used:
+- `feature` (blue)
+- `bug` (red) - aliases: `defect`, `issue`
+- `task` (white) - aliases: `chore`
+
+Running `sltasks --generate` creates default templates in `{task_root}/templates/`.
+
 ## Task file format
 
 Tasks are Markdown files with YAML frontmatter stored in the `.tasks/` directory:
@@ -100,7 +176,8 @@ Tasks are Markdown files with YAML frontmatter stored in the `.tasks/` directory
 title: "Fix login bug"
 state: todo
 priority: high
-tags: [bug, auth]
+type: bug
+tags: [auth]
 ---
 
 Task description here.
@@ -113,4 +190,5 @@ All fields are optional. Missing fields use defaults:
 | `title` | Filename |
 | `state` | `todo` |
 | `priority` | `medium` |
+| `type` | (none) |
 | `tags` | `[]` |

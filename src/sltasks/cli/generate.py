@@ -1,5 +1,7 @@
 """Generate command for creating default config."""
 
+import importlib.resources
+import logging
 import sys
 from pathlib import Path
 
@@ -8,8 +10,10 @@ import yaml
 from ..models.sltasks_config import SltasksConfig
 from .output import success, info, error
 
+logger = logging.getLogger(__name__)
 
 CONFIG_FILE = "sltasks.yml"
+TEMPLATES_DIR = "templates"
 
 # Header comments for generated file
 CONFIG_HEADER = """\
@@ -25,6 +29,12 @@ CONFIG_HEADER = """\
 # Status Aliases:
 #   - Optional list of alternative status values mapping to column ID
 #   - Useful for mapping existing file states or synonyms
+#
+# Task Types:
+#   - Define types with optional templates in {task_root}/templates/
+#   - Each type has: id, template (optional), color, type_alias (optional)
+#   - color: Named color (blue, red, etc.) or hex (#ff0000)
+#   - Templates provide default content and frontmatter for new tasks
 #
 # Example custom columns:
 #   columns:
@@ -86,14 +96,56 @@ def generate_config_yaml(task_root: str = ".tasks") -> str:
     config_dict = config.model_dump()
     config_dict["task_root"] = task_root  # Use provided task_root
 
-    # Clean up empty status_alias fields
+    # Clean up empty status_alias fields in columns
     if "board" in config_dict and "columns" in config_dict["board"]:
         for col in config_dict["board"]["columns"]:
             if "status_alias" in col and not col["status_alias"]:
                 del col["status_alias"]
 
+    # Clean up types: remove None templates and empty type_alias
+    if "board" in config_dict and "types" in config_dict["board"]:
+        for type_cfg in config_dict["board"]["types"]:
+            if "template" in type_cfg and type_cfg["template"] is None:
+                del type_cfg["template"]
+            if "type_alias" in type_cfg and not type_cfg["type_alias"]:
+                del type_cfg["type_alias"]
+
     yaml_content = yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
     return CONFIG_HEADER + yaml_content
+
+
+def _copy_bundled_templates(task_root: Path) -> bool:
+    """Copy bundled default templates to task_root/templates/.
+
+    Args:
+        task_root: Path to the task directory
+
+    Returns:
+        True if templates were created, False if already exist
+    """
+    templates_dir = task_root / TEMPLATES_DIR
+
+    # Check if templates already exist
+    if templates_dir.exists() and any(templates_dir.glob("*.md")):
+        return False
+
+    templates_dir.mkdir(exist_ok=True)
+
+    try:
+        # Use importlib.resources to access bundled templates
+        package_templates = importlib.resources.files("sltasks.data.templates")
+        templates_copied = 0
+
+        for resource in package_templates.iterdir():
+            if resource.name.endswith(".md"):
+                content = resource.read_text()
+                (templates_dir / resource.name).write_text(content)
+                templates_copied += 1
+
+        return templates_copied > 0
+    except Exception as e:
+        logger.warning(f"Failed to copy templates: {e}")
+        return False
 
 
 def run_generate(project_root: Path) -> int:
@@ -108,6 +160,7 @@ def run_generate(project_root: Path) -> int:
     """
     config_created = False
     dir_created = False
+    templates_created = False
 
     config_path = project_root / CONFIG_FILE
 
@@ -145,8 +198,17 @@ def run_generate(project_root: Path) -> int:
     else:
         info(f"Directory exists: {task_dir}/")
 
+    # Copy bundled templates if not already present
+    templates_dir = task_dir / TEMPLATES_DIR
+    if templates_dir.exists() and any(templates_dir.glob("*.md")):
+        info(f"Templates exist: {templates_dir}/")
+    else:
+        if _copy_bundled_templates(task_dir):
+            success(f"Created templates: {templates_dir}/")
+            templates_created = True
+
     # Summary
-    if not config_created and not dir_created:
+    if not config_created and not dir_created and not templates_created:
         print("Nothing to generate.")
         return 1
 

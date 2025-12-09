@@ -4,6 +4,7 @@ from .board_service import BoardService
 from .config_service import ConfigService
 from .filter_service import Filter, FilterService
 from .task_service import TaskService
+from .template_service import TemplateService
 
 __all__ = [
     "BoardService",
@@ -11,4 +12,5 @@ __all__ = [
     "Filter",
     "FilterService",
     "TaskService",
+    "TemplateService",
 ]

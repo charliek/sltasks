@@ -3,6 +3,7 @@ version: 1
 columns:
   todo:
   - add-dark-mode.md
+  - test-bug.md
   - setup-ci.md
   in_progress:
   - refactor-api.md

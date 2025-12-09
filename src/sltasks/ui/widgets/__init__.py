@@ -5,6 +5,7 @@ from .command_bar import CommandBar
 from .confirm_modal import ConfirmModal
 from .task_card import TaskCard
 from .task_preview_modal import TaskPreviewModal
+from .type_selector import TypeSelectorModal
 
 from ..screens.help import HelpScreen
 
@@ -16,4 +17,5 @@ __all__ = [
     "KanbanColumn",
     "TaskCard",
     "TaskPreviewModal",
+    "TypeSelectorModal",
 ]
