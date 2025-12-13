@@ -120,7 +120,7 @@ class GitHubRepository:
             is_org = self.config.owner_type == "org"
 
         if not owner or not project_number:
-             raise ValueError("GitHub configuration requires project_url or owner/project_number")
+            raise ValueError("GitHub configuration requires project_url or owner/project_number")
 
         query_root = "organization(login: $owner)" if is_org else "user(login: $owner)"
 
@@ -264,7 +264,7 @@ class GitHubRepository:
             return None
 
         # Determine status
-        status = "todo" # Default
+        status = "todo"  # Default
         for fv in node.get("fieldValues", {}).get("nodes", []):
             if fv.get("field", {}).get("name") == "Status":
                 status = fv.get("name", "todo")
@@ -276,13 +276,13 @@ class GitHubRepository:
 
         # If the status is not mapped and not valid, default to first column
         if not board_config.is_valid_status(canonical_state):
-             # Try mapping case-insensitive match against alias
-             pass # For now, let it be what it is, UI handles unknown columns by hiding or putting in 'archived'?
-             # Actually UI might crash if unknown state.
-             # Sltasks treats unknown states as just another state, but board view needs them in columns.
-             # If status doesn't match a column, it won't show up on board unless we map it.
-             # Let's trust the resolve_status which handles aliases.
-             pass
+            # Try mapping case-insensitive match against alias
+            pass  # For now, let it be what it is, UI handles unknown columns by hiding or putting in 'archived'?
+            # Actually UI might crash if unknown state.
+            # Sltasks treats unknown states as just another state, but board view needs them in columns.
+            # If status doesn't match a column, it won't show up on board unless we map it.
+            # Let's trust the resolve_status which handles aliases.
+            pass
 
         # Parse labels for tags and priority
         labels = [label["name"] for label in content.get("labels", {}).get("nodes", [])]
@@ -312,7 +312,7 @@ class GitHubRepository:
 
         return Task(
             filename=filename,
-            filepath=None, # No local file
+            filepath=None,  # No local file
             title=content["title"],
             state=canonical_state,
             priority=priority,
@@ -384,7 +384,7 @@ class GitHubRepository:
 
     def save_board_order(self, order: BoardOrder) -> None:
         """Save board order - Not implemented for Read-Only."""
-        pass # No-op or raise, but board service might call it. Better to no-op for now.
+        pass  # No-op or raise, but board service might call it. Better to no-op for now.
 
     def rename_in_board_order(self, old_filename: str, new_filename: str) -> None:
         pass
@@ -392,5 +392,5 @@ class GitHubRepository:
     def reload(self) -> None:
         """Reload tasks."""
         self._tasks.clear()
-        self._project_id = None # Force re-fetch of metadata just in case
+        self._project_id = None  # Force re-fetch of metadata just in case
         self.get_all()

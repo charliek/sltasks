@@ -87,11 +87,15 @@ class SltasksApp(App):
 
         config = self.config_service.get_config()
         if config.backend == "github" and config.github:
-            self.repository: RepositoryProtocol = GitHubRepository(config.github, self.config_service)
+            self.repository: RepositoryProtocol = GitHubRepository(
+                config.github, self.config_service
+            )
         else:
             # Get task_root from config service (computed from project_root + config.task_root)
             task_root = self.config_service.task_root
-            self.repository: RepositoryProtocol = FilesystemRepository(task_root, self.config_service)
+            self.repository: RepositoryProtocol = FilesystemRepository(
+                task_root, self.config_service
+            )
 
         self.template_service = TemplateService(self.config_service)
         self.task_service = TaskService(self.repository, self.config_service, self.template_service)
