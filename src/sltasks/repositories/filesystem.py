@@ -11,6 +11,7 @@ import yaml
 
 from ..models import BoardOrder, Task
 from ..models.sltasks_config import BoardConfig
+from .protocol import RepositoryCapabilities
 
 if TYPE_CHECKING:
     from ..services.config_service import ConfigService
@@ -38,6 +39,18 @@ class FilesystemRepository:
         self._config_service = config_service
         self._tasks: dict[str, Task] = {}
         self._board_order: BoardOrder | None = None
+
+    @property
+    def capabilities(self) -> RepositoryCapabilities:
+        """Get repository capabilities."""
+        return RepositoryCapabilities(
+            can_create=True,
+            can_edit=True,
+            can_delete=True,
+            can_move_column=True,
+            can_reorder=True,
+            can_archive=True,
+        )
 
     def _get_board_config(self) -> BoardConfig:
         """Get board config, using default if no config service."""

@@ -1,6 +1,7 @@
 """Configuration models for sltasks.yml."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -275,12 +276,27 @@ class BoardConfig(BaseModel):
         )
 
 
+class GitHubConfig(BaseModel):
+    """Configuration for GitHub Projects backend."""
+
+    project_url: str | None = None
+    owner: str | None = None
+    owner_type: Literal["org", "user"] = "user"
+    project_number: int | None = None
+    default_repo: str | None = None
+    include_closed: bool = False
+    include_prs: bool = True
+    include_drafts: bool = False
+
+
 class SltasksConfig(BaseModel):
     """Root configuration from sltasks.yml."""
 
     version: int = 1
+    backend: Literal["filesystem", "github"] = "filesystem"
     task_root: str = Field(default=".tasks", description="Relative path to tasks directory")
     board: BoardConfig = Field(default_factory=BoardConfig.default)
+    github: GitHubConfig | None = None
 
     @field_validator("task_root")
     @classmethod

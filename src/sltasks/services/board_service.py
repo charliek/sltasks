@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from ..models import Board, BoardOrder, Task
 from ..models.sltasks_config import BoardConfig
 from ..models.task import STATE_ARCHIVED
-from ..repositories import FilesystemRepository
+from ..repositories.protocol import RepositoryProtocol
 from ..utils import now_utc
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ class BoardService:
 
     def __init__(
         self,
-        repository: FilesystemRepository,
+        repository: RepositoryProtocol,
         config_service: ConfigService | None = None,
     ) -> None:
         self.repository = repository
