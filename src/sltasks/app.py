@@ -6,6 +6,8 @@ from textual.screen import ModalScreen
 
 from .config import Settings
 from .repositories import FilesystemRepository
+from .repositories.github import GitHubRepository
+from .repositories.protocol import RepositoryProtocol
 from .services import (
     BoardService,
     ConfigService,
@@ -82,9 +84,15 @@ class SltasksApp(App):
     def _init_services(self) -> None:
         """Initialize repository and services."""
         self.config_service = ConfigService(self.settings.project_root)
-        # Get task_root from config service (computed from project_root + config.task_root)
-        task_root = self.config_service.task_root
-        self.repository = FilesystemRepository(task_root, self.config_service)
+
+        config = self.config_service.get_config()
+        if config.backend == "github" and config.github:
+            self.repository: RepositoryProtocol = GitHubRepository(config.github, self.config_service)
+        else:
+            # Get task_root from config service (computed from project_root + config.task_root)
+            task_root = self.config_service.task_root
+            self.repository: RepositoryProtocol = FilesystemRepository(task_root, self.config_service)
+
         self.template_service = TemplateService(self.config_service)
         self.task_service = TaskService(self.repository, self.config_service, self.template_service)
         self.board_service = BoardService(self.repository, self.config_service)
@@ -147,6 +155,10 @@ class SltasksApp(App):
     # Task actions
     def action_new_task(self) -> None:
         """Create a new task - shows type selector if types configured."""
+        if not self.repository.capabilities.can_create:
+            self.notify("Creation not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -198,6 +210,10 @@ class SltasksApp(App):
 
     def action_edit_task(self) -> None:
         """Edit the current task in external editor."""
+        if not self.repository.capabilities.can_edit:
+            self.notify("Editing not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -252,6 +268,10 @@ class SltasksApp(App):
 
     def action_move_task_left(self) -> None:
         """Move current task to previous column."""
+        if not self.repository.capabilities.can_move_column:
+            self.notify("Moving not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -268,6 +288,10 @@ class SltasksApp(App):
 
     def action_move_task_right(self) -> None:
         """Move current task to next column."""
+        if not self.repository.capabilities.can_move_column:
+            self.notify("Moving not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -284,6 +308,10 @@ class SltasksApp(App):
 
     def action_move_task_up(self) -> None:
         """Move current task up in column."""
+        if not self.repository.capabilities.can_reorder:
+            self.notify("Reordering not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -298,6 +326,10 @@ class SltasksApp(App):
 
     def action_move_task_down(self) -> None:
         """Move current task down in column."""
+        if not self.repository.capabilities.can_reorder:
+            self.notify("Reordering not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -312,6 +344,10 @@ class SltasksApp(App):
 
     def action_archive_task(self) -> None:
         """Archive the current task."""
+        if not self.repository.capabilities.can_archive:
+            self.notify("Archiving not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return
@@ -326,6 +362,10 @@ class SltasksApp(App):
 
     def action_delete_task(self) -> None:
         """Delete the current task (with confirmation)."""
+        if not self.repository.capabilities.can_delete:
+            self.notify("Deletion not supported by this backend", severity="warning")
+            return
+
         screen = self.screen
         if not isinstance(screen, BoardScreen):
             return

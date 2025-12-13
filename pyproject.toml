@@ -8,6 +8,7 @@ dependencies = [
     "textual>=0.89.0",
     "pydantic-settings>=2.6.0",
     "python-frontmatter>=1.1.0",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]

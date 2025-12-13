@@ -63,6 +63,7 @@ class BoardScreen(Screen):
 
     def on_mount(self) -> None:
         """Load tasks when screen mounts."""
+        self._update_bindings()
         self.load_tasks()
         # Focus first task after loading
         self.call_after_refresh(self._initial_focus)
@@ -70,6 +71,12 @@ class BoardScreen(Screen):
     def _initial_focus(self) -> None:
         """Set initial focus after mount."""
         self._update_focus()
+
+    def _update_bindings(self) -> None:
+        """Update app bindings based on repository capabilities."""
+        # caps = self.app.repository.capabilities # pyrefly: ignore[missing-attribute]
+        # Ideally we would update bindings visibility here
+        pass
 
     def set_filter(self, filter_: Filter | None, expression: str = "") -> None:
         """Set the active filter."""
@@ -106,6 +113,9 @@ class BoardScreen(Screen):
         # Save current position as fallback
         saved_column = self._current_column
         saved_task = self._current_task
+
+        # Update bindings based on capabilities
+        self._update_bindings()
 
         # Reload data
         self.app.board_service.reload()  # pyrefly: ignore[missing-attribute]

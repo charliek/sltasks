@@ -8,7 +8,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from ..models import Priority, Task
-from ..repositories import FilesystemRepository
+from ..repositories.protocol import RepositoryProtocol
 from ..utils import generate_filename, now_utc
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ class TaskService:
 
     def __init__(
         self,
-        repository: FilesystemRepository,
+        repository: RepositoryProtocol,
         config_service: ConfigService | None = None,
         template_service: TemplateService | None = None,
     ) -> None:
