@@ -74,8 +74,6 @@ class BoardScreen(Screen):
 
     def _update_bindings(self) -> None:
         """Update app bindings based on repository capabilities."""
-        # caps = self.app.repository.capabilities # pyrefly: ignore[missing-attribute]
-        # Ideally we would update bindings visibility here
         pass
 
     def set_filter(self, filter_: Filter | None, expression: str = "") -> None:

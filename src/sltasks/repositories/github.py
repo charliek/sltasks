@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from ..models import BoardOrder, Task, Priority
+from ..models import BoardOrder, Priority, Task
 from ..models.sltasks_config import BoardConfig, GitHubConfig
 from .protocol import RepositoryCapabilities
 
@@ -112,8 +112,8 @@ class GitHubRepository:
                 project_number = int(parts[-1])
                 owner = parts[-3]
                 is_org = parts[-4] == "orgs"
-            except (ValueError, IndexError):
-                raise ValueError(f"Invalid project URL: {self.config.project_url}")
+            except (ValueError, IndexError) as err:
+                raise ValueError(f"Invalid project URL: {self.config.project_url}") from err
         else:
             owner = self.config.owner
             project_number = self.config.project_number
@@ -285,7 +285,7 @@ class GitHubRepository:
              pass
 
         # Parse labels for tags and priority
-        labels = [l["name"] for l in content.get("labels", {}).get("nodes", [])]
+        labels = [label["name"] for label in content.get("labels", {}).get("nodes", [])]
 
         priority = Priority.MEDIUM
         tags = []
