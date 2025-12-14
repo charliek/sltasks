@@ -24,7 +24,7 @@ class BoardScreen(Screen):
         self._current_task = 0
         self._filter: Filter | None = None
         # Pending focus state for deferred focus after refresh
-        self._pending_focus_filename: str | None = None
+        self._pending_focus_task_id: str | None = None
         self._pending_column = 0
         self._pending_task = 0
 
@@ -95,13 +95,13 @@ class BoardScreen(Screen):
             except Exception as e:
                 self.log.error(f"Failed to load column {widget_id}: {e}")
 
-    def refresh_board(self, focus_task_filename: str | None = None) -> None:
+    def refresh_board(self, focus_task_id: str | None = None) -> None:
         """
         Refresh the board display.
 
         Args:
-            focus_task_filename: If provided, focus this task after refresh.
-                                If None, preserves current position.
+            focus_task_id: If provided, focus this task after refresh.
+                          If None, preserves current position.
         """
         # Save current position as fallback
         saved_column = self._current_column
@@ -112,7 +112,7 @@ class BoardScreen(Screen):
         self.load_tasks()
 
         # Store focus target for deferred application
-        self._pending_focus_filename = focus_task_filename
+        self._pending_focus_task_id = focus_task_id
         self._pending_column = saved_column
         self._pending_task = saved_task
 
@@ -124,12 +124,12 @@ class BoardScreen(Screen):
         # This ensures column _refresh_tasks has completed
         self.call_after_refresh(self._apply_pending_focus)
 
-    def _find_task_position(self, filename: str) -> tuple[int, int] | None:
+    def _find_task_position(self, task_id: str) -> tuple[int, int] | None:
         """
-        Find a task's position by filename.
+        Find a task's position by ID.
 
         Args:
-            filename: The task filename to search for
+            task_id: The task ID to search for
 
         Returns:
             (column_index, task_index) or None if not found
@@ -139,15 +139,15 @@ class BoardScreen(Screen):
             if column is None:
                 continue
             for task_idx, task in enumerate(column.tasks):
-                if task.filename == filename:
+                if task.id == task_id:
                     return (col_idx, task_idx)
         return None
 
     def _apply_pending_focus(self) -> None:
         """Apply pending focus after refresh completes."""
-        if self._pending_focus_filename:
-            # Find the task by filename
-            position = self._find_task_position(self._pending_focus_filename)
+        if self._pending_focus_task_id:
+            # Find the task by ID
+            position = self._find_task_position(self._pending_focus_task_id)
             if position:
                 self._current_column, self._current_task = position
                 self._update_focus()

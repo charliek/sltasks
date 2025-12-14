@@ -2,9 +2,7 @@
 
 from datetime import UTC, datetime
 
-import pytest
-
-from sltasks.models import Board, BoardConfig, BoardOrder, ColumnConfig, Priority, Task
+from sltasks.models import Board, BoardConfig, BoardOrder, ColumnConfig, Task
 from sltasks.models.task import (
     STATE_ARCHIVED,
     STATE_DONE,
@@ -20,25 +18,25 @@ class TestTaskFromFrontmatter:
     def test_from_frontmatter_unknown_state_accepted(self):
         """Unknown state values are accepted (validation happens at config level)."""
         task = Task.from_frontmatter(
-            filename="task.md",
+            task_id="task.md",
             metadata={"state": "custom_state"},
             body="",
         )
         assert task.state == "custom_state"
 
-    def test_from_frontmatter_invalid_priority_uses_default(self):
-        """Invalid priority value raises ValueError (Pydantic validation)."""
-        with pytest.raises(ValueError):
-            Task.from_frontmatter(
-                filename="task.md",
-                metadata={"priority": "super_high"},
-                body="",
-            )
+    def test_from_frontmatter_custom_priority_accepted(self):
+        """Custom priority values are accepted (validation happens at config level)."""
+        task = Task.from_frontmatter(
+            task_id="task.md",
+            metadata={"priority": "super_high"},
+            body="",
+        )
+        assert task.priority == "super_high"
 
     def test_from_frontmatter_missing_state_uses_default(self):
         """Missing state defaults to 'todo'."""
         task = Task.from_frontmatter(
-            filename="task.md",
+            task_id="task.md",
             metadata={},
             body="",
         )
@@ -47,11 +45,11 @@ class TestTaskFromFrontmatter:
     def test_from_frontmatter_missing_priority_uses_default(self):
         """Missing priority defaults to 'medium'."""
         task = Task.from_frontmatter(
-            filename="task.md",
+            task_id="task.md",
             metadata={},
             body="",
         )
-        assert task.priority == Priority.MEDIUM
+        assert task.priority == "medium"
 
 
 class TestTaskDisplayTitle:
@@ -59,17 +57,17 @@ class TestTaskDisplayTitle:
 
     def test_display_title_with_title_set(self):
         """display_title returns title when set."""
-        task = Task(filename="task.md", title="My Custom Title")
+        task = Task(id="task.md", title="My Custom Title")
         assert task.display_title == "My Custom Title"
 
     def test_display_title_without_title(self):
-        """display_title transforms filename when title is None."""
-        task = Task(filename="my-task-name.md", title=None)
+        """display_title transforms id when title is None."""
+        task = Task(id="my-task-name.md", title=None)
         assert task.display_title == "My Task Name"
 
-    def test_display_title_complex_filename(self):
+    def test_display_title_complex_id(self):
         """display_title handles multiple hyphens correctly."""
-        task = Task(filename="fix-login-timeout-bug.md", title=None)
+        task = Task(id="fix-login-timeout-bug.md", title=None)
         assert task.display_title == "Fix Login Timeout Bug"
 
 
@@ -115,10 +113,10 @@ class TestBoardFromTasks:
     def test_from_tasks_groups_all_states(self):
         """from_tasks correctly groups tasks by all 4 states."""
         tasks = [
-            Task(filename="t1.md", state=STATE_TODO),
-            Task(filename="t2.md", state=STATE_IN_PROGRESS),
-            Task(filename="t3.md", state=STATE_DONE),
-            Task(filename="t4.md", state=STATE_ARCHIVED),
+            Task(id="t1.md", state=STATE_TODO),
+            Task(id="t2.md", state=STATE_IN_PROGRESS),
+            Task(id="t3.md", state=STATE_DONE),
+            Task(id="t4.md", state=STATE_ARCHIVED),
         ]
 
         board = Board.from_tasks(tasks)
@@ -127,10 +125,10 @@ class TestBoardFromTasks:
         assert len(board.get_column(STATE_IN_PROGRESS)) == 1
         assert len(board.get_column(STATE_DONE)) == 1
         assert len(board.get_column(STATE_ARCHIVED)) == 1
-        assert board.get_column(STATE_TODO)[0].filename == "t1.md"
-        assert board.get_column(STATE_IN_PROGRESS)[0].filename == "t2.md"
-        assert board.get_column(STATE_DONE)[0].filename == "t3.md"
-        assert board.get_column(STATE_ARCHIVED)[0].filename == "t4.md"
+        assert board.get_column(STATE_TODO)[0].id == "t1.md"
+        assert board.get_column(STATE_IN_PROGRESS)[0].id == "t2.md"
+        assert board.get_column(STATE_DONE)[0].id == "t3.md"
+        assert board.get_column(STATE_ARCHIVED)[0].id == "t4.md"
 
     def test_from_tasks_empty_list(self):
         """from_tasks handles empty task list."""
@@ -144,16 +142,16 @@ class TestBoardFromTasks:
     def test_from_tasks_multiple_same_state(self):
         """from_tasks handles multiple tasks in same state."""
         tasks = [
-            Task(filename="t1.md", state=STATE_TODO),
-            Task(filename="t2.md", state=STATE_TODO),
-            Task(filename="t3.md", state=STATE_TODO),
+            Task(id="t1.md", state=STATE_TODO),
+            Task(id="t2.md", state=STATE_TODO),
+            Task(id="t3.md", state=STATE_TODO),
         ]
 
         board = Board.from_tasks(tasks)
 
         assert len(board.get_column(STATE_TODO)) == 3
-        filenames = [t.filename for t in board.get_column(STATE_TODO)]
-        assert filenames == ["t1.md", "t2.md", "t3.md"]
+        task_ids = [t.id for t in board.get_column(STATE_TODO)]
+        assert task_ids == ["t1.md", "t2.md", "t3.md"]
 
 
 class TestBoardDynamicColumns:
@@ -169,9 +167,9 @@ class TestBoardDynamicColumns:
             ]
         )
         tasks = [
-            Task(filename="a.md", state="backlog"),
-            Task(filename="b.md", state="active"),
-            Task(filename="c.md", state="complete"),
+            Task(id="a.md", state="backlog"),
+            Task(id="b.md", state="active"),
+            Task(id="c.md", state="complete"),
         ]
 
         board = Board.from_tasks(tasks, config)
@@ -179,7 +177,7 @@ class TestBoardDynamicColumns:
         assert len(board.get_column("backlog")) == 1
         assert len(board.get_column("active")) == 1
         assert len(board.get_column("complete")) == 1
-        assert board.get_column("backlog")[0].filename == "a.md"
+        assert board.get_column("backlog")[0].id == "a.md"
 
     def test_unknown_state_goes_to_first_column(self):
         """Tasks with unknown states go to first configured column."""
@@ -190,14 +188,14 @@ class TestBoardDynamicColumns:
             ]
         )
         tasks = [
-            Task(filename="a.md", state="weird_unknown_state"),
+            Task(id="a.md", state="weird_unknown_state"),
         ]
 
         board = Board.from_tasks(tasks, config)
 
         # Unknown state placed in first column (todo)
         assert len(board.get_column("todo")) == 1
-        assert board.get_column("todo")[0].filename == "a.md"
+        assert board.get_column("todo")[0].id == "a.md"
         # Original state preserved on task
         assert board.get_column("todo")[0].state == "weird_unknown_state"
 
@@ -210,13 +208,13 @@ class TestBoardDynamicColumns:
             ]
         )
         tasks = [
-            Task(filename="archived.md", state=STATE_ARCHIVED),
+            Task(id="archived.md", state=STATE_ARCHIVED),
         ]
 
         board = Board.from_tasks(tasks, config)
 
         assert len(board.get_column(STATE_ARCHIVED)) == 1
-        assert board.get_column(STATE_ARCHIVED)[0].filename == "archived.md"
+        assert board.get_column(STATE_ARCHIVED)[0].id == "archived.md"
 
     def test_get_visible_columns(self):
         """get_visible_columns returns correct tuples."""
@@ -227,9 +225,9 @@ class TestBoardDynamicColumns:
             ]
         )
         tasks = [
-            Task(filename="1.md", state="a"),
-            Task(filename="2.md", state="b"),
-            Task(filename="3.md", state=STATE_ARCHIVED),
+            Task(id="1.md", state="a"),
+            Task(id="2.md", state="b"),
+            Task(id="3.md", state=STATE_ARCHIVED),
         ]
 
         board = Board.from_tasks(tasks, config)
@@ -248,9 +246,9 @@ class TestBoardDynamicColumns:
             ]
         )
         tasks = [
-            Task(filename="1.md", state="new"),
-            Task(filename="2.md", state="finished"),
-            Task(filename="3.md", state="todo"),
+            Task(id="1.md", state="new"),
+            Task(id="2.md", state="finished"),
+            Task(id="3.md", state="todo"),
         ]
 
         board = Board.from_tasks(tasks, config)
@@ -258,8 +256,8 @@ class TestBoardDynamicColumns:
         assert len(board.get_column("todo")) == 2
         assert len(board.get_column("done")) == 1
 
-        todo_files = sorted([t.filename for t in board.get_column("todo")])
-        assert todo_files == ["1.md", "3.md"]
+        todo_ids = sorted([t.id for t in board.get_column("todo")])
+        assert todo_ids == ["1.md", "3.md"]
 
 
 class TestBoardOrderDynamic:

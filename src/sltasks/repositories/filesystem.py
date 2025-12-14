@@ -58,9 +58,9 @@ class FilesystemRepository:
         self._reconcile()
         return self._sorted_tasks()
 
-    def get_by_id(self, filename: str) -> Task | None:
-        """Load a single task by filename."""
-        filepath = self.task_root / filename
+    def get_by_id(self, task_id: str) -> Task | None:
+        """Load a single task by ID."""
+        filepath = self.task_root / task_id
         if not filepath.exists():
             return None
         return self._parse_task_file(filepath)
@@ -74,7 +74,7 @@ class FilesystemRepository:
         """
         self.ensure_directory()
 
-        filepath = self.task_root / task.filename
+        filepath = self.task_root / task.id
         task.filepath = filepath
 
         # Build front matter document
@@ -88,21 +88,21 @@ class FilesystemRepository:
         # Update board order
         self._ensure_board_order()
         if self._board_order is not None:
-            self._board_order.add_task(task.filename, task.state)
+            self._board_order.add_task(task.id, task.state)
             self._save_board_order()
 
         return task
 
-    def delete(self, filename: str) -> None:
+    def delete(self, task_id: str) -> None:
         """Delete a task file from the filesystem."""
-        filepath = self.task_root / filename
+        filepath = self.task_root / task_id
         if filepath.exists():
             filepath.unlink()
 
         # Remove from board order
         self._ensure_board_order()
         if self._board_order is not None:
-            self._board_order.remove_task(filename)
+            self._board_order.remove_task(task_id)
             self._save_board_order()
 
     # --- Board Order Operations ---
@@ -119,17 +119,17 @@ class FilesystemRepository:
         self._board_order = order
         self._save_board_order()
 
-    def rename_in_board_order(self, old_filename: str, new_filename: str) -> None:
+    def rename_in_board_order(self, old_task_id: str, new_task_id: str) -> None:
         """Rename a task in the board order."""
         self._ensure_board_order()
         if self._board_order is None:
             return
 
-        # Find and replace the filename in all columns
+        # Find and replace the task ID in all columns
         for column in self._board_order.columns.values():
-            for i, filename in enumerate(column):
-                if filename == old_filename:
-                    column[i] = new_filename
+            for i, task_id in enumerate(column):
+                if task_id == old_task_id:
+                    column[i] = new_task_id
                     break
 
         self._save_board_order()
@@ -153,7 +153,7 @@ class FilesystemRepository:
         for filepath in self._iter_task_files():
             task = self._parse_task_file(filepath)
             if task:
-                self._tasks[task.filename] = task
+                self._tasks[task.id] = task
 
     def _iter_task_files(self) -> Iterator[Path]:
         """Iterate over all .md files in the task root."""
@@ -164,7 +164,7 @@ class FilesystemRepository:
         try:
             post = frontmatter.load(filepath)  # pyrefly: ignore[bad-argument-type]
             task = Task.from_frontmatter(
-                filename=filepath.name,
+                task_id=filepath.name,
                 metadata=post.metadata,
                 body=post.content,
                 filepath=filepath,
@@ -250,32 +250,32 @@ class FilesystemRepository:
 
         # Add new files and fix misplaced files
         all_in_yaml: set[str] = set()
-        for filenames in self._board_order.columns.values():
-            all_in_yaml.update(filenames)
+        for task_ids in self._board_order.columns.values():
+            all_in_yaml.update(task_ids)
 
-        for filename, task in self._tasks.items():
+        for task_id, task in self._tasks.items():
             state_value = task.state  # Now a string, no .value needed
 
-            if filename not in all_in_yaml:
+            if task_id not in all_in_yaml:
                 # New file - add to appropriate column
-                self._board_order.add_task(filename, state_value)
+                self._board_order.add_task(task_id, state_value)
                 modified = True
             else:
                 # Check if in wrong column (file state takes precedence)
-                current_column = self._find_task_column(filename)
+                current_column = self._find_task_column(task_id)
                 if current_column and current_column != state_value:
-                    self._board_order.move_task(filename, current_column, state_value)
+                    self._board_order.move_task(task_id, current_column, state_value)
                     modified = True
 
         if modified:
             self._save_board_order()
 
-    def _find_task_column(self, filename: str) -> str | None:
+    def _find_task_column(self, task_id: str) -> str | None:
         """Find which column a task is currently in."""
         if self._board_order is None:
             return None
-        for state, filenames in self._board_order.columns.items():
-            if filename in filenames:
+        for state, task_ids in self._board_order.columns.items():
+            if task_id in task_ids:
                 return state
         return None
 
@@ -292,15 +292,15 @@ class FilesystemRepository:
         position_map: dict[str, tuple[int, int]] = {}
 
         for state_idx, state in enumerate(column_ids):
-            filenames = self._board_order.columns.get(state, [])
-            for pos_idx, filename in enumerate(filenames):
-                position_map[filename] = (state_idx, pos_idx)
+            task_ids = self._board_order.columns.get(state, [])
+            for pos_idx, task_id in enumerate(task_ids):
+                position_map[task_id] = (state_idx, pos_idx)
 
         def sort_key(task: Task) -> tuple[int, int, str]:
-            if task.filename in position_map:
-                state_idx, pos_idx = position_map[task.filename]
-                return (state_idx, pos_idx, task.filename)
+            if task.id in position_map:
+                state_idx, pos_idx = position_map[task.id]
+                return (state_idx, pos_idx, task.id)
             # Tasks not in yaml go to end
-            return (999, 999, task.filename)
+            return (999, 999, task.id)
 
         return sorted(self._tasks.values(), key=sort_key)

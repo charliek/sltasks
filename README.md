@@ -175,6 +175,19 @@ board:
     - defect
   - id: task
     color: white
+  priorities:
+  - id: low
+    label: Low
+    color: green
+  - id: medium
+    label: Medium
+    color: yellow
+  - id: high
+    label: High
+    color: orange1
+  - id: critical
+    label: Critical
+    color: red
 ```
 
 **Column constraints:**
@@ -186,6 +199,11 @@ board:
 - Types categorize tasks with colored display and optional templates
 - Templates in `{task_root}/templates/` provide default content for new tasks
 - Run `sltasks --generate` to create default templates
+
+**Priorities:**
+- Priorities are ordered from lowest to highest (first = lowest)
+- Each priority has an ID, display label, and color
+- Support aliases (e.g., map "urgent" to "critical")
 
 ## Filtering
 

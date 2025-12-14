@@ -58,8 +58,8 @@ class TestBoardServiceLoad:
         assert len(board.get_column(STATE_IN_PROGRESS)) == 1
         assert len(board.get_column(STATE_DONE)) == 1
         assert len(board.get_column(STATE_ARCHIVED)) == 1
-        assert board.get_column(STATE_TODO)[0].filename == "task1.md"
-        assert board.get_column(STATE_IN_PROGRESS)[0].filename == "task2.md"
+        assert board.get_column(STATE_TODO)[0].id == "task1.md"
+        assert board.get_column(STATE_IN_PROGRESS)[0].id == "task2.md"
 
 
 class TestBoardServiceMoveTask:

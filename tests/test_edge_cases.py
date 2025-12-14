@@ -128,7 +128,7 @@ class TestUnknownStates:
         """Tasks with unknown states go to first column."""
         config = BoardConfig.default()
         tasks = [
-            Task(filename="task.md", state="weird_state"),
+            Task(id="task.md", state="weird_state"),
         ]
 
         board = Board.from_tasks(tasks, config)
@@ -140,9 +140,9 @@ class TestUnknownStates:
         """Multiple unknown states all go to first column."""
         config = BoardConfig.default()
         tasks = [
-            Task(filename="task1.md", state="weird"),
-            Task(filename="task2.md", state="strange"),
-            Task(filename="task3.md", state="todo"),
+            Task(id="task1.md", state="weird"),
+            Task(id="task2.md", state="strange"),
+            Task(id="task3.md", state="todo"),
         ]
 
         board = Board.from_tasks(tasks, config)
@@ -233,23 +233,23 @@ board:
         assert task.state == "backlog"
 
         # Move right
-        task = board_service.move_task_right(task.filename)
+        task = board_service.move_task_right(task.id)
         assert task.state == "active"
 
         # Move right again
-        task = board_service.move_task_right(task.filename)
+        task = board_service.move_task_right(task.id)
         assert task.state == "done"
 
         # Can't move right anymore (at last column) - returns task unchanged
-        result = board_service.move_task_right(task.filename)
+        result = board_service.move_task_right(task.id)
         assert result.state == "done"  # Still at done
 
         # Archive
-        task = board_service.archive_task(task.filename)
+        task = board_service.archive_task(task.id)
         assert task.state == "archived"
 
         # Unarchive goes to first column
-        task = board_service.unarchive_task(task.filename)
+        task = board_service.unarchive_task(task.id)
         assert task.state == "backlog"
 
     def test_filter_custom_states(self, task_dir: Path):

@@ -17,6 +17,12 @@
 #   - color: Named color (blue, red, etc.) or hex (#ff0000)
 #   - Templates provide default content and frontmatter for new tasks
 #
+# Priorities:
+#   - Define priority levels ordered from lowest to highest
+#   - Each priority has: id, label, color, symbol (optional), priority_alias (optional)
+#   - Order determines rank: first = lowest priority, last = highest
+#   - color: Named color (green, yellow, orange1, red, etc.) or hex (#ff0000)
+#
 # Example custom columns:
 #   columns:
 #     - id: backlog
@@ -59,3 +65,28 @@ board:
     color: white
     type_alias:
     - chore
+  priorities:
+  - id: low
+    label: Low
+    color: green
+    symbol: "\u25CF"
+    priority_alias:
+    - trivial
+    - minor
+  - id: medium
+    label: Medium
+    color: yellow
+    symbol: "\u25CF"
+  - id: high
+    label: High
+    color: orange1
+    symbol: "\u25CF"
+    priority_alias:
+    - important
+  - id: critical
+    label: Critical
+    color: red
+    symbol: "\u25CF"
+    priority_alias:
+    - blocker
+    - urgent

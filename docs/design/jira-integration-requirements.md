@@ -32,17 +32,19 @@ CLI → App → Services → FilesystemRepository → Filesystem
          UI (Textual)
 ```
 
-### Proposed Architecture
+### Current Architecture
+
+The `RepositoryProtocol` is already implemented in `src/sltasks/repositories/protocol.py`:
 
 ```
 CLI → App → Services → RepositoryProtocol ←─┬─ FilesystemRepository → Filesystem
                 ↓                           │
-         UI (Textual)                       └─ JiraRepository → Jira REST API
+         UI (Textual)                       └─ JiraRepository → Jira REST API (future)
 ```
 
 ### Key Insight
 
-The service layer (TaskService, BoardService) should remain unchanged. They interact with a repository interface that can be backed by either filesystem or Jira.
+The service layer (TaskService, BoardService) remains unchanged. They interact with the `RepositoryProtocol` interface, which can be backed by either filesystem or Jira.
 
 ---
 
@@ -123,7 +125,7 @@ JIRA_AUTH=user@company.com:api-token
 
 | Task Field | Jira Field | Notes |
 |------------|------------|-------|
-| `filename` | `issue.key` | e.g., "PROJ-123" becomes identifier |
+| `id` | `issue.key` | e.g., "PROJ-123" becomes identifier |
 | `title` | `summary` | Direct mapping |
 | `state` | `status.name` | Mapped through column_mapping |
 | `priority` | `priority.name` | May need mapping (Jira has 5 levels) |
@@ -136,12 +138,36 @@ JIRA_AUTH=user@company.com:api-token
 
 ### Priority Mapping
 
-| sltasks | Jira |
-|---------|------|
-| `critical` | Highest |
-| `high` | High |
-| `medium` | Medium |
-| `low` | Low, Lowest |
+Priorities are now configurable strings in sltasks. The `priority_alias` feature enables mapping Jira priority names:
+
+```yaml
+board:
+  priorities:
+    - id: critical
+      label: Critical
+      color: red
+      priority_alias:
+        - Highest
+        - Blocker
+    - id: high
+      label: High
+      color: orange1
+      priority_alias:
+        - High
+    - id: medium
+      label: Medium
+      color: yellow
+      priority_alias:
+        - Medium
+    - id: low
+      label: Low
+      color: green
+      priority_alias:
+        - Low
+        - Lowest
+```
+
+When loading Jira issues, the `priority.name` field is resolved through `priority_alias` to the canonical sltasks priority ID.
 
 ### BoardOrder Handling
 
@@ -157,47 +183,24 @@ For Jira, ordering within columns can be handled by:
 
 ## Repository Interface
 
-### Proposed Protocol
+### Implemented Protocol
+
+The `RepositoryProtocol` is already implemented in `src/sltasks/repositories/protocol.py`:
 
 ```python
-from typing import Protocol
-
 class RepositoryProtocol(Protocol):
     """Interface for task storage backends."""
 
-    def get_all(self) -> list[Task]:
-        """Load all tasks from the backend."""
-        ...
-
-    def get_by_id(self, task_id: str) -> Task | None:
-        """Get a single task by ID (filename or issue key)."""
-        ...
-
-    def save(self, task: Task) -> Task:
-        """Create or update a task."""
-        ...
-
-    def delete(self, task_id: str) -> None:
-        """Delete a task."""
-        ...
-
-    def get_board_order(self) -> BoardOrder:
-        """Get task ordering within columns."""
-        ...
-
-    def save_board_order(self, order: BoardOrder) -> None:
-        """Save task ordering (may be no-op for some backends)."""
-        ...
-
-    def reload(self) -> None:
-        """Clear caches and reload from source."""
-        ...
+    def get_all(self) -> list[Task]: ...
+    def get_by_id(self, task_id: str) -> Task | None: ...
+    def save(self, task: Task) -> Task: ...
+    def delete(self, task_id: str) -> None: ...
+    def get_board_order(self) -> BoardOrder: ...
+    def save_board_order(self, order: BoardOrder) -> None: ...
+    def reload(self) -> None: ...
 ```
 
-### FilesystemRepository Changes
-
-- Implement the protocol (already does implicitly)
-- Add `ensure_directory()` to protocol or keep as filesystem-specific
+The `FilesystemRepository` implements this protocol. The `JiraRepository` should follow the same interface.
 
 ### JiraRepository Implementation
 
@@ -218,7 +221,7 @@ class JiraRepository:
         ...
 
     def save(self, task: Task) -> Task:
-        if task.filename.startswith("NEW-"):
+        if task.id.startswith("NEW-"):
             # Create new issue
             return self._create_issue(task)
         else:

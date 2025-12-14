@@ -65,7 +65,9 @@ CLI (__main__.py) → App (app.py) → Services → Repository → Filesystem
   - `BoardService`: Board state management, task movement between columns
   - `FilterService`: Parses filter expressions, applies filters to task lists
   - `TemplateService`: Loads task templates, merges template frontmatter with new tasks
-- **Repository Layer** (`repositories/filesystem.py`): File I/O, manages task files and `tasks.yaml` ordering
+- **Repository Layer** (`repositories/`): Task storage backends
+  - `RepositoryProtocol`: Interface for storage backends (supports filesystem, future GitHub/Jira)
+  - `FilesystemRepository`: File I/O, manages task files and `tasks.yaml` ordering
 - **UI Layer** (`ui/`): Textual screens and widgets
 
 ### Data Flow
@@ -80,7 +82,8 @@ CLI (__main__.py) → App (app.py) → Services → Repository → Filesystem
 
 - `Task`: Pydantic model with frontmatter fields (title, state, priority, type, tags) and body content
 - `Board`/`BoardOrder`: Board state with tasks grouped by column
-- `SltasksConfig`/`BoardConfig`/`ColumnConfig`/`TypeConfig`: Configuration hierarchy from `sltasks.yml`
+- `SltasksConfig`/`BoardConfig`/`ColumnConfig`/`TypeConfig`/`PriorityConfig`: Configuration hierarchy from `sltasks.yml`
+- `RepositoryProtocol`: Interface for task storage backends
 
 ### Task File Format
 
@@ -152,8 +155,9 @@ Columns are configured in `sltasks.yml`:
 
 ### Design Decisions
 
-- **No abstract base classes**: Direct implementation without ABC interfaces (YAGNI until multiple backends needed)
+- **Repository Protocol**: `RepositoryProtocol` defines the interface for task storage backends (filesystem, future GitHub/Jira)
 - **String-based states**: `Task.state` is a string, not an enum, to support custom columns
+- **String-based priorities**: `Task.priority` is a string with configurable `PriorityConfig` for colors/aliases
 - **No backwards compatibility shims**: Early project, remove deprecated code rather than maintain it
 
 ## Code Style

@@ -167,6 +167,69 @@ If no config file exists, these default types are used:
 
 Running `sltasks --generate` creates default templates in `{task_root}/templates/`.
 
+## Priorities
+
+Priorities are configurable levels of importance for tasks, with customizable colors, symbols, and ordering.
+
+### Priority configuration
+
+```yaml
+board:
+  columns:
+    # ... columns
+  priorities:  # Ordered lowest to highest
+    - id: low
+      label: Low
+      color: green
+      symbol: ●
+      priority_alias:
+        - trivial
+        - minor
+    - id: medium
+      label: Medium
+      color: yellow
+    - id: high
+      label: High
+      color: orange1
+      priority_alias:
+        - important
+    - id: critical
+      label: Critical
+      color: red
+      priority_alias:
+        - blocker
+        - urgent
+```
+
+Each priority has:
+
+| Property | Description |
+|----------|-------------|
+| `id` | Internal identifier used in task `priority` field (lowercase, alphanumeric, underscores) |
+| `label` | Display name shown in the TUI |
+| `color` | Display color - named color or hex code |
+| `symbol` | Display symbol (defaults to ●) |
+| `priority_alias` | Optional list of alternative priority values mapping to this priority ID |
+
+### Priority Ordering
+
+The order in the configuration determines priority rank. First in list = lowest priority, last = highest. This enables meaningful sorting and comparison.
+
+### Priority Aliases
+
+Priority aliases work like status and type aliases - they map alternative names to canonical priority IDs. This is useful when:
+- You have existing files with different priority names
+- You want to support synonyms (e.g., `urgent` → `critical`, `trivial` → `low`)
+
+### Default Priorities
+
+If no priorities are configured, these defaults are used (ordered lowest to highest):
+
+- `low` (green)
+- `medium` (yellow)
+- `high` (orange)
+- `critical` (red)
+
 ## Task file format
 
 Tasks are Markdown files with YAML frontmatter stored in the `.tasks/` directory:
@@ -188,7 +251,7 @@ All fields are optional. Missing fields use defaults:
 | Field | Default |
 |-------|---------|
 | `title` | Filename |
-| `state` | `todo` |
-| `priority` | `medium` |
+| `state` | `todo` (first configured column) |
+| `priority` | `medium` (configurable, see Priorities section) |
 | `type` | (none) |
 | `tags` | `[]` |

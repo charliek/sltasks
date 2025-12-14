@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from ..models import Board, BoardOrder, Task
 from ..models.sltasks_config import BoardConfig
 from ..models.task import STATE_ARCHIVED
-from ..repositories import FilesystemRepository
+from ..repositories import RepositoryProtocol
 from ..utils import now_utc
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ class BoardService:
 
     def __init__(
         self,
-        repository: FilesystemRepository,
+        repository: RepositoryProtocol,
         config_service: ConfigService | None = None,
     ) -> None:
         self.repository = repository
@@ -42,13 +42,13 @@ class BoardService:
         tasks = self.repository.get_all()
         return [t for t in tasks if t.state == state]
 
-    def move_task(self, filename: str, to_state: str) -> Task | None:
+    def move_task(self, task_id: str, to_state: str) -> Task | None:
         """
         Move a task to a different state/column.
 
         Updates both the task file and the board order.
         """
-        task = self.repository.get_by_id(filename)
+        task = self.repository.get_by_id(task_id)
         if task is None:
             return None
 
@@ -64,9 +64,9 @@ class BoardService:
 
         return task
 
-    def move_task_left(self, filename: str) -> Task | None:
+    def move_task_left(self, task_id: str) -> Task | None:
         """Move task to the previous column (e.g., in_progress -> todo)."""
-        task = self.repository.get_by_id(filename)
+        task = self.repository.get_by_id(task_id)
         if task is None:
             return None
 
@@ -74,11 +74,11 @@ class BoardService:
         if new_state is None:
             return task  # Already at leftmost column
 
-        return self.move_task(filename, new_state)
+        return self.move_task(task_id, new_state)
 
-    def move_task_right(self, filename: str) -> Task | None:
+    def move_task_right(self, task_id: str) -> Task | None:
         """Move task to the next column (e.g., todo -> in_progress)."""
-        task = self.repository.get_by_id(filename)
+        task = self.repository.get_by_id(task_id)
         if task is None:
             return None
 
@@ -86,21 +86,21 @@ class BoardService:
         if new_state is None:
             return task  # Already at rightmost column
 
-        return self.move_task(filename, new_state)
+        return self.move_task(task_id, new_state)
 
-    def archive_task(self, filename: str) -> Task | None:
+    def archive_task(self, task_id: str) -> Task | None:
         """Move a task to the archived state."""
-        return self.move_task(filename, STATE_ARCHIVED)
+        return self.move_task(task_id, STATE_ARCHIVED)
 
-    def unarchive_task(self, filename: str) -> Task | None:
+    def unarchive_task(self, task_id: str) -> Task | None:
         """Move an archived task to the first column."""
-        task = self.repository.get_by_id(filename)
+        task = self.repository.get_by_id(task_id)
         if task is None or task.state != STATE_ARCHIVED:
             return None
 
         config = self._get_board_config()
         first_column = config.columns[0].id
-        return self.move_task(filename, first_column)
+        return self.move_task(task_id, first_column)
 
     def get_board_order(self) -> BoardOrder:
         """Get the current board order."""
@@ -110,28 +110,28 @@ class BoardService:
         """Save the board order."""
         self.repository.save_board_order(order)
 
-    def reorder_task(self, filename: str, delta: int) -> bool:
+    def reorder_task(self, task_id: str, delta: int) -> bool:
         """
         Reorder task within its column.
 
         Args:
-            filename: Task filename to reorder
+            task_id: Task ID to reorder
             delta: -1 to move up, 1 to move down
 
         Returns:
             True if task was moved
         """
-        task = self.repository.get_by_id(filename)
+        task = self.repository.get_by_id(task_id)
         if task is None:
             return False
 
         board_order = self.repository.get_board_order()
         column = board_order.columns.get(task.state, [])
 
-        if filename not in column:
+        if task_id not in column:
             return False
 
-        current_idx = column.index(filename)
+        current_idx = column.index(task_id)
         new_idx = current_idx + delta
 
         # Check bounds

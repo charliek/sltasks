@@ -41,13 +41,17 @@ This document outlines the requirements and design considerations for adding Git
 
 ## Architecture Overview
 
-### Proposed Architecture
+### Current Architecture
+
+The `RepositoryProtocol` is already implemented in `src/sltasks/repositories/protocol.py`, defining the interface for task storage backends:
 
 ```
 CLI → App → Services → RepositoryProtocol ←─┬─ FilesystemRepository → Filesystem
-                ↓                           ├─ JiraRepository → Jira API
-         UI (Textual)                       └─ GitHubProjectsRepository → GitHub GraphQL API
+                ↓                           ├─ JiraRepository → Jira API (future)
+         UI (Textual)                       └─ GitHubProjectsRepository → GitHub GraphQL API (future)
 ```
+
+The protocol defines: `get_all()`, `get_by_id()`, `save()`, `delete()`, `get_board_order()`, `save_board_order()`, and `reload()`.
 
 ### Key Insight: Issues ARE Markdown
 
@@ -203,7 +207,7 @@ GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 
 | Task Field | GitHub Field | Notes |
 |------------|--------------|-------|
-| `filename` | `issue.number` | e.g., "123" or "owner/repo#123" |
+| `id` | `issue.number` | e.g., "123" or "owner/repo#123" |
 | `title` | `issue.title` | Direct mapping |
 | `state` | Project Status field | Via `ProjectV2ItemFieldSingleSelectValue` |
 | `priority` | Labels (convention) | e.g., "priority:high" label |
@@ -229,16 +233,38 @@ We need to track both the issue identifier and the project item ID.
 
 ### Priority via Labels
 
-GitHub doesn't have a native priority field. Convention-based approach:
+GitHub doesn't have a native priority field. sltasks now supports configurable priorities with aliases, making GitHub label mapping straightforward:
 
-| sltasks Priority | GitHub Label |
-|------------------|--------------|
-| `critical` | `priority:critical` or `P0` |
-| `high` | `priority:high` or `P1` |
-| `medium` | `priority:medium` or `P2` |
-| `low` | `priority:low` or `P3` |
+```yaml
+board:
+  priorities:
+    - id: critical
+      label: Critical
+      color: red
+      priority_alias:
+        - P0
+        - priority:critical
+    - id: high
+      label: High
+      color: orange1
+      priority_alias:
+        - P1
+        - priority:high
+    - id: medium
+      label: Medium
+      color: yellow
+      priority_alias:
+        - P2
+        - priority:medium
+    - id: low
+      label: Low
+      color: green
+      priority_alias:
+        - P3
+        - priority:low
+```
 
-Configuration option to customize label patterns.
+The `priority_alias` field maps GitHub label conventions to sltasks priority IDs. When loading issues, labels matching any alias are resolved to the canonical priority ID.
 
 ### Task Type via Labels
 

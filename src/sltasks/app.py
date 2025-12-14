@@ -181,19 +181,19 @@ class SltasksApp(App):
             task_type=task_type,
         )
 
-        original_filename = task.filename
+        original_task_id = task.id
 
         # Open in editor
         with self.suspend():
             self.task_service.open_in_editor(task)
 
         # Rename the file to match the (possibly updated) title
-        renamed_task = self.task_service.rename_task_to_match_title(original_filename)
-        task_filename = renamed_task.filename if renamed_task else original_filename
+        renamed_task = self.task_service.rename_task_to_match_title(original_task_id)
+        task_id = renamed_task.id if renamed_task else original_task_id
 
         # Reload and refresh, focusing the new task
         self.board_service.reload()
-        screen.refresh_board(focus_task_filename=task_filename)
+        screen.refresh_board(focus_task_id=task_id)
         self.notify("Task created", timeout=2)
 
     def action_edit_task(self) -> None:
@@ -260,10 +260,10 @@ class SltasksApp(App):
         if task is None:
             return
 
-        task_filename = task.filename
-        result = self.board_service.move_task_left(task_filename)
+        task_id = task.id
+        result = self.board_service.move_task_left(task_id)
         if result and result.state != task.state:
-            screen.refresh_board(focus_task_filename=task_filename)
+            screen.refresh_board(focus_task_id=task_id)
             self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
 
     def action_move_task_right(self) -> None:
@@ -276,10 +276,10 @@ class SltasksApp(App):
         if task is None:
             return
 
-        task_filename = task.filename
-        result = self.board_service.move_task_right(task_filename)
+        task_id = task.id
+        result = self.board_service.move_task_right(task_id)
         if result and result.state != task.state:
-            screen.refresh_board(focus_task_filename=task_filename)
+            screen.refresh_board(focus_task_id=task_id)
             self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
 
     def action_move_task_up(self) -> None:
@@ -292,9 +292,9 @@ class SltasksApp(App):
         if task is None:
             return
 
-        task_filename = task.filename
-        if self.board_service.reorder_task(task_filename, -1):
-            screen.refresh_board(focus_task_filename=task_filename)
+        task_id = task.id
+        if self.board_service.reorder_task(task_id, -1):
+            screen.refresh_board(focus_task_id=task_id)
 
     def action_move_task_down(self) -> None:
         """Move current task down in column."""
@@ -306,9 +306,9 @@ class SltasksApp(App):
         if task is None:
             return
 
-        task_filename = task.filename
-        if self.board_service.reorder_task(task_filename, 1):
-            screen.refresh_board(focus_task_filename=task_filename)
+        task_id = task.id
+        if self.board_service.reorder_task(task_id, 1):
+            screen.refresh_board(focus_task_id=task_id)
 
     def action_archive_task(self) -> None:
         """Archive the current task."""
@@ -320,7 +320,7 @@ class SltasksApp(App):
         if task is None:
             return
 
-        self.board_service.archive_task(task.filename)
+        self.board_service.archive_task(task.id)
         screen.refresh_board()
         self.notify("Task archived", timeout=2)
 
@@ -351,7 +351,7 @@ class SltasksApp(App):
 
         task = screen.get_current_task()
         if task:
-            self.task_service.delete_task(task.filename)
+            self.task_service.delete_task(task.id)
             screen.refresh_board()
             self.notify("Task deleted", timeout=2)
 
@@ -365,7 +365,7 @@ class SltasksApp(App):
         if task is None:
             return
 
-        task_filename = task.filename
+        task_id = task.id
 
         # Get column order from config
         config = self.config_service.get_board_config()
@@ -380,10 +380,10 @@ class SltasksApp(App):
             # Unknown state, move to first column
             new_state = column_ids[0]
 
-        self.board_service.move_task(task_filename, new_state)
+        self.board_service.move_task(task_id, new_state)
 
         # Focus follows task to its new column
-        screen.refresh_board(focus_task_filename=task_filename)
+        screen.refresh_board(focus_task_id=task_id)
 
         self.notify(f"State: {new_state.replace('_', ' ')}", timeout=2)
 

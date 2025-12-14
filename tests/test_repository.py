@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sltasks.models import BoardOrder, Priority, Task
+from sltasks.models import BoardOrder, Task
 from sltasks.models.task import (
     STATE_DONE,
     STATE_IN_PROGRESS,
@@ -57,8 +57,8 @@ class TestFilesystemRepository:
         tasks = repo.get_all()
 
         assert len(tasks) == 2
-        filenames = {t.filename for t in tasks}
-        assert filenames == {"task1.md", "task2.md"}
+        task_ids = {t.id for t in tasks}
+        assert task_ids == {"task1.md", "task2.md"}
 
     def test_get_all_handles_minimal_frontmatter(self, task_dir: Path, repo: FilesystemRepository):
         """get_all handles files with no frontmatter."""
@@ -68,9 +68,9 @@ class TestFilesystemRepository:
 
         assert len(tasks) == 1
         task = tasks[0]
-        assert task.filename == "minimal.md"
+        assert task.id == "minimal.md"
         assert task.state == STATE_TODO  # default
-        assert task.priority == Priority.MEDIUM  # default
+        assert task.priority == "medium"  # default
 
     def test_get_by_id_returns_task(self, task_dir: Path, repo: FilesystemRepository):
         """get_by_id returns the task if it exists."""
@@ -90,10 +90,10 @@ class TestFilesystemRepository:
     def test_save_creates_new_task(self, repo: FilesystemRepository, task_dir: Path):
         """save creates a new task file."""
         task = Task(
-            filename="new-task.md",
+            id="new-task.md",
             title="New Task",
             state=STATE_TODO,
-            priority=Priority.HIGH,
+            priority="high",
             tags=["bug", "urgent"],
             body="Task description here.",
         )
@@ -114,7 +114,7 @@ class TestFilesystemRepository:
         """save updates an existing task file."""
         # Create initial task
         task = Task(
-            filename="update-me.md",
+            id="update-me.md",
             title="Original Title",
             state=STATE_TODO,
         )
@@ -133,7 +133,7 @@ class TestFilesystemRepository:
 
     def test_delete_removes_task(self, repo: FilesystemRepository, task_dir: Path):
         """delete removes the task file."""
-        task = Task(filename="delete-me.md", title="Delete Me")
+        task = Task(id="delete-me.md", title="Delete Me")
         repo.save(task)
         assert (task_dir / "delete-me.md").exists()
 
@@ -151,7 +151,7 @@ class TestBoardOrder:
 
     def test_save_creates_tasks_yaml(self, repo: FilesystemRepository, task_dir: Path):
         """Saving a task creates tasks.yaml."""
-        task = Task(filename="task.md", title="Task", state=STATE_TODO)
+        task = Task(id="task.md", title="Task", state=STATE_TODO)
         repo.save(task)
 
         yaml_path = task_dir / "tasks.yaml"
@@ -164,9 +164,9 @@ class TestBoardOrder:
     def test_get_board_order_returns_order(self, repo: FilesystemRepository, task_dir: Path):  # noqa: ARG002
         """get_board_order returns the current ordering."""
         # Create tasks in different states
-        repo.save(Task(filename="t1.md", state=STATE_TODO))
-        repo.save(Task(filename="t2.md", state=STATE_IN_PROGRESS))
-        repo.save(Task(filename="t3.md", state=STATE_DONE))
+        repo.save(Task(id="t1.md", state=STATE_TODO))
+        repo.save(Task(id="t2.md", state=STATE_IN_PROGRESS))
+        repo.save(Task(id="t3.md", state=STATE_DONE))
 
         order = repo.get_board_order()
 
@@ -206,7 +206,7 @@ class TestReconciliation:
     def test_missing_files_removed_from_yaml(self, task_dir: Path, repo: FilesystemRepository):  # noqa: ARG002
         """Files in yaml but not on disk are removed from yaml."""
         # Create a task through repo
-        repo.save(Task(filename="exists.md", state=STATE_TODO))
+        repo.save(Task(id="exists.md", state=STATE_TODO))
 
         # Manually add a reference to a non-existent file
         order = repo.get_board_order()
@@ -225,7 +225,7 @@ class TestReconciliation:
     def test_file_state_takes_precedence(self, task_dir: Path, repo: FilesystemRepository):
         """If file state differs from yaml column, file wins."""
         # Create task as TODO
-        repo.save(Task(filename="task.md", state=STATE_TODO))
+        repo.save(Task(id="task.md", state=STATE_TODO))
 
         # Manually change the file to IN_PROGRESS
         (task_dir / "task.md").write_text("---\nstate: in_progress\n---\nContent")
@@ -241,9 +241,9 @@ class TestReconciliation:
     def test_tasks_sorted_by_board_order(self, task_dir: Path, repo: FilesystemRepository):  # noqa: ARG002
         """get_all returns tasks sorted by board order position."""
         # Create tasks
-        repo.save(Task(filename="c.md", state=STATE_TODO))
-        repo.save(Task(filename="a.md", state=STATE_TODO))
-        repo.save(Task(filename="b.md", state=STATE_TODO))
+        repo.save(Task(id="c.md", state=STATE_TODO))
+        repo.save(Task(id="a.md", state=STATE_TODO))
+        repo.save(Task(id="b.md", state=STATE_TODO))
 
         # Set custom order
         order = repo.get_board_order()
@@ -255,8 +255,8 @@ class TestReconciliation:
         tasks = repo.get_all()
 
         todo_tasks = [t for t in tasks if t.state == STATE_TODO]
-        filenames = [t.filename for t in todo_tasks]
-        assert filenames == ["b.md", "a.md", "c.md"]
+        task_ids = [t.id for t in todo_tasks]
+        assert task_ids == ["b.md", "a.md", "c.md"]
 
 
 class TestReload:
@@ -264,7 +264,7 @@ class TestReload:
 
     def test_reload_clears_cache(self, task_dir: Path, repo: FilesystemRepository):
         """reload clears internal caches."""
-        repo.save(Task(filename="task.md", state=STATE_TODO))
+        repo.save(Task(id="task.md", state=STATE_TODO))
         tasks1 = repo.get_all()
         assert len(tasks1) == 1
 

@@ -7,30 +7,25 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import Static
 
-from ...models import Priority, Task
-from ...models.sltasks_config import TypeConfig
+from ...models import Task
+from ...models.sltasks_config import PriorityConfig, TypeConfig
 
 
 class TaskCard(Widget, can_focus=True):
     """A task card displayed in a column."""
 
-    PRIORITY_DISPLAY = {
-        Priority.CRITICAL: ("●", "red", "critical"),
-        Priority.HIGH: ("●", "orange1", "high"),
-        Priority.MEDIUM: ("●", "yellow", "medium"),
-        Priority.LOW: ("●", "green", "low"),
-    }
-
     def __init__(
         self,
         task_data: Task,
         type_config: TypeConfig | None = None,
+        priority_config: PriorityConfig | None = None,
         *args,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
         self._task_data = task_data
         self._type_config = type_config
+        self._priority_config = priority_config
 
     @property
     def task(self) -> Task:  # pyrefly: ignore[bad-override]
@@ -67,10 +62,17 @@ class TaskCard(Widget, can_focus=True):
                 yield Static(preview, classes="task-preview")
 
     def _format_priority(self) -> str:
-        """Format priority for display."""
-        symbol, color, label = self.PRIORITY_DISPLAY.get(
-            self._task_data.priority, ("●", "white", "medium")
-        )
+        """Format priority for display using config."""
+        if self._priority_config:
+            # Use configured color, symbol, and label
+            color = self._priority_config.color
+            symbol = self._priority_config.symbol
+            label = self._priority_config.label
+        else:
+            # Fallback for unknown priorities
+            color = "white"
+            symbol = "●"
+            label = self._task_data.priority
         return f"[{color}]{symbol}[/] {label}"
 
     def _format_type(self) -> str:

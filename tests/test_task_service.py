@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from sltasks.models import Priority
 from sltasks.models.task import STATE_IN_PROGRESS, STATE_TODO
 from sltasks.repositories import FilesystemRepository
 from sltasks.services import TaskService
@@ -37,10 +36,10 @@ class TestTaskServiceCreate:
         """create_task creates a task file with correct defaults."""
         task = task_service.create_task("My New Task")
 
-        assert task.filename == "my-new-task.md"
+        assert task.id == "my-new-task.md"
         assert task.title == "My New Task"
         assert task.state == STATE_TODO
-        assert task.priority == Priority.MEDIUM
+        assert task.priority == "medium"
         assert task.created is not None
         assert task.updated is not None
         assert (task_dir / "my-new-task.md").exists()
@@ -50,19 +49,19 @@ class TestTaskServiceCreate:
         task = task_service.create_task(
             "In Progress Task",
             state=STATE_IN_PROGRESS,
-            priority=Priority.HIGH,
+            priority="high",
         )
 
         assert task.state == STATE_IN_PROGRESS
-        assert task.priority == Priority.HIGH
+        assert task.priority == "high"
 
-    def test_create_task_unique_filename_collision(self, task_service: TaskService):
-        """Creating tasks with same title generates unique filenames."""
+    def test_create_task_unique_id_collision(self, task_service: TaskService):
+        """Creating tasks with same title generates unique IDs."""
         task1 = task_service.create_task("Fix Bug")
         task2 = task_service.create_task("Fix Bug")
 
-        assert task1.filename == "fix-bug.md"
-        assert task2.filename == "fix-bug-1.md"
+        assert task1.id == "fix-bug.md"
+        assert task2.id == "fix-bug-1.md"
 
     def test_create_task_multiple_collisions(self, task_service: TaskService):
         """Handles 3+ tasks with same title."""
@@ -70,9 +69,9 @@ class TestTaskServiceCreate:
         task2 = task_service.create_task("Same Title")
         task3 = task_service.create_task("Same Title")
 
-        assert task1.filename == "same-title.md"
-        assert task2.filename == "same-title-1.md"
-        assert task3.filename == "same-title-2.md"
+        assert task1.id == "same-title.md"
+        assert task2.id == "same-title-1.md"
+        assert task3.id == "same-title-2.md"
 
 
 class TestTaskServiceUpdate:
@@ -93,7 +92,7 @@ class TestTaskServiceUpdate:
         assert updated_task.title == "Updated Title"
 
         # Verify persisted
-        reloaded = repo.get_by_id(task.filename)
+        reloaded = repo.get_by_id(task.id)
         assert reloaded.title == "Updated Title"
 
 
@@ -105,13 +104,13 @@ class TestTaskServiceDelete:
     ):
         """delete_task removes the file and board order entry."""
         task = task_service.create_task("Delete Me")
-        filename = task.filename
-        assert (task_dir / filename).exists()
+        task_id = task.id
+        assert (task_dir / task_id).exists()
 
-        task_service.delete_task(filename)
+        task_service.delete_task(task_id)
 
-        assert not (task_dir / filename).exists()
-        assert repo.get_by_id(filename) is None
+        assert not (task_dir / task_id).exists()
+        assert repo.get_by_id(task_id) is None
 
 
 class TestTaskServiceGet:

@@ -5,8 +5,6 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .enums import Priority
-
 # State constants for common states
 STATE_TODO = "todo"
 STATE_IN_PROGRESS = "in_progress"
@@ -17,14 +15,14 @@ STATE_ARCHIVED = "archived"
 class Task(BaseModel):
     """Represents a single task from a markdown file."""
 
-    # File identification
-    filename: str  # e.g., "fix-login-bug.md"
-    filepath: Path | None = None  # Full path, set by repository
+    # Task identification
+    id: str  # e.g., "fix-login-bug.md" (filesystem), "PROJ-123" (Jira), "#456" (GitHub)
+    filepath: Path | None = None  # Full path, set by repository (filesystem only)
 
     # Front matter fields (all optional with defaults)
     title: str | None = None  # Defaults to filename without .md
-    state: str = STATE_TODO  # Now a string to support custom states
-    priority: Priority = Priority.MEDIUM
+    state: str = STATE_TODO  # String to support custom states
+    priority: str = "medium"  # String to support configurable priorities
     tags: list[str] = Field(default_factory=list)
     type: str | None = None  # Task type (feature, bug, task, etc.)
     created: datetime | None = None
@@ -35,18 +33,22 @@ class Task(BaseModel):
 
     @property
     def display_title(self) -> str:
-        """Title for display - uses filename if title not set."""
+        """Title for display - uses ID if title not set."""
         if self.title:
             return self.title
-        return self.filename.replace(".md", "").replace("-", " ").title()
+        # For filesystem IDs (ending in .md), transform to readable title
+        display = self.id
+        if display.endswith(".md"):
+            display = display[:-3]
+        return display.replace("-", " ").title()
 
     def to_frontmatter(self) -> dict:
         """Convert to dict suitable for YAML front matter."""
         data: dict = {}
         if self.title:
             data["title"] = self.title
-        data["state"] = self.state  # String, no .value needed
-        data["priority"] = self.priority.value
+        data["state"] = self.state
+        data["priority"] = self.priority
         if self.tags:
             data["tags"] = self.tags
         if self.type:
@@ -60,18 +62,18 @@ class Task(BaseModel):
     @classmethod
     def from_frontmatter(
         cls,
-        filename: str,
+        task_id: str,
         metadata: dict,
         body: str,
         filepath: Path | None = None,
     ) -> "Task":
         """Create Task from parsed front matter."""
         return cls(
-            filename=filename,
+            id=task_id,
             filepath=filepath,
             title=metadata.get("title"),
             state=metadata.get("state", STATE_TODO),
-            priority=Priority(metadata.get("priority", "medium")),
+            priority=metadata.get("priority", "medium"),
             tags=metadata.get("tags", []),
             type=metadata.get("type"),
             created=_parse_datetime(metadata.get("created")),

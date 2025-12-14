@@ -93,11 +93,54 @@ class TypeConfig(BaseModel):
         return self.template or f"{self.id}.md"
 
 
+def _validate_color(v: str) -> str:
+    """Validate color is a valid named color or hex code."""
+    if v.startswith("#"):
+        hex_part = v[1:]
+        if len(hex_part) not in (3, 6):
+            raise ValueError("Hex color must be 3 or 6 characters (e.g., #fff or #ffffff)")
+        if not all(c in "0123456789abcdefABCDEF" for c in hex_part):
+            raise ValueError("Invalid hex color code")
+    return v
+
+
+class PriorityConfig(BaseModel):
+    """Configuration for a single priority level.
+
+    Priorities are ordered by position in the config list (first = lowest).
+    """
+
+    id: str = Field(..., min_length=1)
+    label: str = Field(..., min_length=1, description="Display label")
+    color: str = Field(default="white", description="Named color or hex code")
+    symbol: str = Field(default="●", description="Display symbol")
+    priority_alias: list[str] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        """Validate priority ID is lowercase with underscores only."""
+        return _validate_identifier(v, "Priority ID")
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: str) -> str:
+        """Validate color is a valid named color or hex code."""
+        return _validate_color(v)
+
+    @field_validator("priority_alias")
+    @classmethod
+    def validate_aliases(cls, v: list[str]) -> list[str]:
+        """Validate that priority aliases follow identifier format rules."""
+        return _validate_alias_list(v, "Priority alias")
+
+
 class BoardConfig(BaseModel):
-    """Configuration for board columns and task types."""
+    """Configuration for board columns, task types, and priorities."""
 
     columns: list[ColumnConfig] = Field(..., min_length=2, max_length=6)
     types: list[TypeConfig] = Field(default_factory=list)
+    priorities: list[PriorityConfig] = Field(default_factory=list)
 
     @field_validator("columns")
     @classmethod
@@ -159,6 +202,32 @@ class BoardConfig(BaseModel):
 
         return v
 
+    @field_validator("priorities")
+    @classmethod
+    def validate_priorities(cls, v: list[PriorityConfig]) -> list[PriorityConfig]:
+        """Validate priority constraints."""
+        ids = [p.id for p in v]
+
+        # Check unique IDs
+        if len(ids) != len(set(ids)):
+            raise ValueError("Priority IDs must be unique")
+
+        # Collect all priority aliases
+        all_aliases: list[str] = []
+        for p in v:
+            all_aliases.extend(p.priority_alias)
+
+        # Check no alias duplicates a priority ID
+        for alias in all_aliases:
+            if alias in ids:
+                raise ValueError(f"Priority alias '{alias}' conflicts with priority ID")
+
+        # Check no alias duplicates another alias
+        if len(all_aliases) != len(set(all_aliases)):
+            raise ValueError("Duplicate priority alias found")
+
+        return v
+
     @property
     def column_ids(self) -> list[str]:
         """List of column IDs in display order."""
@@ -168,6 +237,11 @@ class BoardConfig(BaseModel):
     def type_ids(self) -> list[str]:
         """List of type IDs in display order."""
         return [t.id for t in self.types]
+
+    @property
+    def priority_ids(self) -> list[str]:
+        """List of priority IDs in order (first = lowest priority)."""
+        return [p.id for p in self.priorities]
 
     def get_title(self, column_id: str) -> str:
         """Get display title for a column ID."""
@@ -254,9 +328,54 @@ class BoardConfig(BaseModel):
             return True
         return any(type_value in t.type_alias for t in self.types)
 
+    def get_priority(self, priority_id: str) -> PriorityConfig | None:
+        """Get priority config by ID."""
+        for p in self.priorities:
+            if p.id == priority_id:
+                return p
+        return None
+
+    def resolve_priority(self, priority_value: str) -> str:
+        """
+        Resolve a priority value to its canonical priority ID.
+
+        If priority_value matches a priority ID, returns it unchanged.
+        If priority_value matches an alias, returns the priority's primary ID.
+        If priority_value is unknown, returns it unchanged.
+        """
+        # Check if it's already a priority ID
+        if priority_value in self.priority_ids:
+            return priority_value
+
+        # Check if it's an alias
+        for p in self.priorities:
+            if priority_value in p.priority_alias:
+                return p.id
+
+        # Unknown priority - return unchanged (let caller handle)
+        return priority_value
+
+    def get_priority_rank(self, priority_id: str) -> int:
+        """
+        Get the rank/order of a priority (position in list).
+
+        Lower values = lower priority. Returns -1 if not found.
+        """
+        resolved = self.resolve_priority(priority_id)
+        try:
+            return self.priority_ids.index(resolved)
+        except ValueError:
+            return -1
+
+    def is_valid_priority(self, priority_value: str) -> bool:
+        """Check if priority_value is a valid priority ID or alias."""
+        if priority_value in self.priority_ids:
+            return True
+        return any(priority_value in p.priority_alias for p in self.priorities)
+
     @classmethod
     def default(cls) -> "BoardConfig":
-        """Return default 3-column configuration with default types."""
+        """Return default 3-column configuration with default types and priorities."""
         return cls(
             columns=[
                 ColumnConfig(id="todo", title="To Do", status_alias=["new"]),
@@ -271,6 +390,27 @@ class BoardConfig(BaseModel):
                 TypeConfig(id="feature", color="blue"),
                 TypeConfig(id="bug", color="red", type_alias=["defect", "issue"]),
                 TypeConfig(id="task", color="white", type_alias=["chore"]),
+            ],
+            priorities=[
+                PriorityConfig(
+                    id="low",
+                    label="Low",
+                    color="green",
+                    priority_alias=["trivial", "minor"],
+                ),
+                PriorityConfig(id="medium", label="Medium", color="yellow"),
+                PriorityConfig(
+                    id="high",
+                    label="High",
+                    color="orange1",
+                    priority_alias=["important"],
+                ),
+                PriorityConfig(
+                    id="critical",
+                    label="Critical",
+                    color="red",
+                    priority_alias=["blocker", "urgent"],
+                ),
             ],
         )
 

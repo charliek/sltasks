@@ -1,10 +1,9 @@
 """Service for parsing and applying filters to tasks."""
 
-import contextlib
 import re
 from dataclasses import dataclass, field
 
-from ..models import Priority, Task
+from ..models import Task
 from ..models.task import STATE_ARCHIVED
 
 
@@ -16,7 +15,7 @@ class Filter:
     tags: list[str] = field(default_factory=list)  # tag:value
     exclude_tags: list[str] = field(default_factory=list)  # -tag:value
     states: list[str] = field(default_factory=list)  # state:value (any string)
-    priorities: list[Priority] = field(default_factory=list)  # priority:value
+    priorities: list[str] = field(default_factory=list)  # priority:value (string)
     types: list[str] = field(default_factory=list)  # type:value
     show_archived: bool = False  # archived:true
 
@@ -66,8 +65,8 @@ class FilterService:
                 f.states.append(value)
 
             elif key == "priority":
-                with contextlib.suppress(ValueError):
-                    f.priorities.append(Priority(value))
+                # Accept any priority string (custom priorities allowed)
+                f.priorities.append(value)
 
             elif key == "archived":
                 f.show_archived = value == "true"

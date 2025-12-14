@@ -36,6 +36,12 @@ CONFIG_HEADER = """\
 #   - color: Named color (blue, red, etc.) or hex (#ff0000)
 #   - Templates provide default content and frontmatter for new tasks
 #
+# Priorities:
+#   - Define priority levels ordered from lowest to highest
+#   - Each priority has: id, label, color, symbol (optional), priority_alias (optional)
+#   - Order determines rank: first = lowest priority, last = highest
+#   - color: Named color (green, yellow, orange1, red, etc.) or hex (#ff0000)
+#
 # Example custom columns:
 #   columns:
 #     - id: backlog
@@ -109,6 +115,12 @@ def generate_config_yaml(task_root: str = ".tasks") -> str:
                 del type_cfg["template"]
             if "type_alias" in type_cfg and not type_cfg["type_alias"]:
                 del type_cfg["type_alias"]
+
+    # Clean up priorities: remove empty priority_alias fields
+    if "board" in config_dict and "priorities" in config_dict["board"]:
+        for priority_cfg in config_dict["board"]["priorities"]:
+            if "priority_alias" in priority_cfg and not priority_cfg["priority_alias"]:
+                del priority_cfg["priority_alias"]
 
     # yaml.dump returns str when stream is None (which is our case)
     yaml_content = yaml.dump(

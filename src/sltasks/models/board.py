@@ -16,7 +16,12 @@ if TYPE_CHECKING:
 
 
 class BoardOrder(BaseModel):
-    """Represents the ordering of tasks in tasks.yaml."""
+    """Represents the ordering of tasks in tasks.yaml.
+
+    The columns dict maps column IDs to lists of task IDs.
+    For the filesystem repository, task IDs are filenames (e.g., "fix-bug.md").
+    For other repositories, task IDs may be issue keys, numbers, etc.
+    """
 
     version: int = 1
     columns: dict[str, list[str]] = Field(default_factory=dict)
@@ -47,36 +52,36 @@ class BoardOrder(BaseModel):
         if column_id not in self.columns:
             self.columns[column_id] = []
 
-    def get_position(self, filename: str, state: str) -> int:
+    def get_position(self, task_id: str, state: str) -> int:
         """Get position of task in its column, or -1 if not found."""
         column = self.columns.get(state, [])
         try:
-            return column.index(filename)
+            return column.index(task_id)
         except ValueError:
             return -1
 
-    def add_task(self, filename: str, state: str, position: int = -1) -> None:
+    def add_task(self, task_id: str, state: str, position: int = -1) -> None:
         """Add task to column at position (-1 = end)."""
         self.ensure_column(state)
 
         # Remove from any existing column first
-        self.remove_task(filename)
+        self.remove_task(task_id)
 
         if position < 0:
-            self.columns[state].append(filename)
+            self.columns[state].append(task_id)
         else:
-            self.columns[state].insert(position, filename)
+            self.columns[state].insert(position, task_id)
 
-    def remove_task(self, filename: str) -> None:
+    def remove_task(self, task_id: str) -> None:
         """Remove task from all columns."""
         for column in self.columns.values():
-            if filename in column:
-                column.remove(filename)
+            if task_id in column:
+                column.remove(task_id)
 
-    def move_task(self, filename: str, _from_state: str, to_state: str, position: int = -1) -> None:
+    def move_task(self, task_id: str, _from_state: str, to_state: str, position: int = -1) -> None:
         """Move task between columns."""
-        self.remove_task(filename)
-        self.add_task(filename, to_state, position)
+        self.remove_task(task_id)
+        self.add_task(task_id, to_state, position)
 
 
 class Board(BaseModel):

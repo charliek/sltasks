@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from ..models import Priority, Task
+from ..models import Task
 from ..repositories import FilesystemRepository
 from ..utils import generate_filename, now_utc
 
@@ -40,7 +39,7 @@ class TaskService:
         self,
         title: str,
         state: str | None = None,
-        priority: Priority | None = None,
+        priority: str | None = None,
         tags: list[str] | None = None,
         task_type: str | None = None,
     ) -> Task:
@@ -73,7 +72,7 @@ class TaskService:
         now = now_utc()
 
         # Base values (always set)
-        final_priority = priority if priority is not None else Priority.MEDIUM
+        final_priority = priority if priority is not None else "medium"
         final_tags = tags if tags is not None else []
         body = ""
 
@@ -89,13 +88,12 @@ class TaskService:
 
             # Use template defaults if not explicitly provided
             if priority is None and "priority" in merged_fm:
-                with contextlib.suppress(ValueError):
-                    final_priority = Priority(merged_fm["priority"])
+                final_priority = merged_fm["priority"]
             if tags is None and "tags" in merged_fm:
                 final_tags = merged_fm.get("tags", [])
 
         task = Task(
-            filename=filename,
+            id=filename,
             title=title,
             state=state,
             priority=final_priority,
@@ -117,51 +115,51 @@ class TaskService:
         task.updated = now_utc()
         return self.repository.save(task)
 
-    def delete_task(self, filename: str) -> None:
-        """Delete a task by filename."""
-        self.repository.delete(filename)
+    def delete_task(self, task_id: str) -> None:
+        """Delete a task by ID."""
+        self.repository.delete(task_id)
 
-    def rename_task_to_match_title(self, filename: str) -> Task | None:
+    def rename_task_to_match_title(self, task_id: str) -> Task | None:
         """
         Rename a task file to match its current title.
 
-        Reads the task, generates a new filename from the title,
+        Reads the task, generates a new ID from the title,
         and renames the file if needed.
 
-        Returns the task with updated filename, or None if task not found.
+        Returns the task with updated ID, or None if task not found.
         """
-        task = self.repository.get_by_id(filename)
+        task = self.repository.get_by_id(task_id)
         if task is None:
             return None
 
         # Generate filename from current title (use display_title which never returns None)
-        new_filename = generate_filename(task.display_title)
+        new_task_id = generate_filename(task.display_title)
 
-        # If filename would be the same, nothing to do
-        if new_filename == filename:
+        # If ID would be the same, nothing to do
+        if new_task_id == task_id:
             return task
 
-        # Ensure unique filename
-        new_filename = self._unique_filename(new_filename)
+        # Ensure unique ID
+        new_task_id = self._unique_filename(new_task_id)
 
         # Rename the file
         if task.filepath and task.filepath.exists():
-            new_filepath = task.filepath.parent / new_filename
+            new_filepath = task.filepath.parent / new_task_id
             task.filepath.rename(new_filepath)
 
-            # Update task with new filename/filepath
-            old_filename = task.filename
-            task.filename = new_filename
+            # Update task with new ID/filepath
+            old_task_id = task.id
+            task.id = new_task_id
             task.filepath = new_filepath
 
             # Update board order to reflect the rename
-            self.repository.rename_in_board_order(old_filename, new_filename)
+            self.repository.rename_in_board_order(old_task_id, new_task_id)
 
         return task
 
-    def get_task(self, filename: str) -> Task | None:
-        """Get a task by filename."""
-        return self.repository.get_by_id(filename)
+    def get_task(self, task_id: str) -> Task | None:
+        """Get a task by ID."""
+        return self.repository.get_by_id(task_id)
 
     def get_all_tasks(self) -> list[Task]:
         """Get all tasks."""

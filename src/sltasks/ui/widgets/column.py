@@ -1,5 +1,7 @@
 """Kanban column widget."""
 
+import re
+
 from textual.actions import SkipAction
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
@@ -8,6 +10,19 @@ from textual.widgets import Static
 
 from ...models import Task
 from .task_card import TaskCard
+
+
+def _task_css_id(task_id: str) -> str:
+    """Generate CSS-safe ID from task identifier.
+
+    Handles various ID formats:
+    - Filesystem: "fix-bug.md" -> "fix-bug"
+    - Jira: "PROJ-123" -> "proj-123"
+    - GitHub: "#456" or "owner/repo#456" -> "456" or "owner-repo-456"
+    """
+    safe_id = re.sub(r"[^a-zA-Z0-9\-]", "-", task_id)
+    safe_id = safe_id.strip("-").lower()
+    return safe_id or "task"
 
 
 class TaskListScroll(VerticalScroll):
@@ -113,15 +128,25 @@ class KanbanColumn(Widget):
                 board_config = self.app.config_service.get_board_config()
 
             for task in self._tasks:
-                # Remove .md extension for valid Textual ID
-                task_id = task.filename.replace(".md", "")
+                # Generate CSS-safe ID from task ID
+                css_id = _task_css_id(task.id)
 
                 # Get type config if task has a type
                 type_config = None
                 if task.type and board_config:
                     type_config = board_config.get_type(task.type)
 
-                card = TaskCard(task, type_config=type_config, id=f"task-{task_id}")
+                # Get priority config for dynamic colors
+                priority_config = None
+                if board_config:
+                    priority_config = board_config.get_priority(task.priority)
+
+                card = TaskCard(
+                    task,
+                    type_config=type_config,
+                    priority_config=priority_config,
+                    id=f"task-{css_id}",
+                )
                 await content.mount(card)
 
         # Update header count
@@ -155,9 +180,9 @@ class KanbanColumn(Widget):
             return False
 
         task = self._tasks[index]
-        task_id = task.filename.replace(".md", "")
+        css_id = _task_css_id(task.id)
         try:
-            card = self.query_one(f"#task-{task_id}", TaskCard)
+            card = self.query_one(f"#task-{css_id}", TaskCard)
             card.focus()
             card.scroll_visible()
             return True
@@ -173,9 +198,9 @@ class KanbanColumn(Widget):
     def get_focused_task_index(self) -> int:
         """Get index of currently focused task, or -1."""
         for i, task in enumerate(self._tasks):
-            task_id = task.filename.replace(".md", "")
+            css_id = _task_css_id(task.id)
             try:
-                card = self.query_one(f"#task-{task_id}", TaskCard)
+                card = self.query_one(f"#task-{css_id}", TaskCard)
                 if card.has_focus:
                     return i
             except Exception:
