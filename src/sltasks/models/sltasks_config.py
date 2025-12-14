@@ -1,6 +1,7 @@
 """Configuration models for sltasks.yml."""
 
 from pathlib import Path
+from typing import ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -62,6 +63,10 @@ class TypeConfig(BaseModel):
     template: str | None = Field(default=None, description="Template filename")
     color: str = Field(default="white", description="Named color or hex code")
     type_alias: list[str] = Field(default_factory=list)
+    canonical_alias: str | None = Field(
+        default=None,
+        description="Label to use when writing to external systems (defaults to id)",
+    )
 
     @field_validator("id")
     @classmethod
@@ -92,6 +97,14 @@ class TypeConfig(BaseModel):
         """Get the template filename (defaults to {id}.md)."""
         return self.template or f"{self.id}.md"
 
+    @property
+    def write_alias(self) -> str:
+        """Get the alias to use when writing to external systems.
+
+        Returns canonical_alias if set, otherwise the id.
+        """
+        return self.canonical_alias or self.id
+
 
 def _validate_color(v: str) -> str:
     """Validate color is a valid named color or hex code."""
@@ -115,6 +128,10 @@ class PriorityConfig(BaseModel):
     color: str = Field(default="white", description="Named color or hex code")
     symbol: str = Field(default="●", description="Display symbol")
     priority_alias: list[str] = Field(default_factory=list)
+    canonical_alias: str | None = Field(
+        default=None,
+        description="Label to use when writing to external systems (defaults to id)",
+    )
 
     @field_validator("id")
     @classmethod
@@ -133,6 +150,14 @@ class PriorityConfig(BaseModel):
     def validate_aliases(cls, v: list[str]) -> list[str]:
         """Validate that priority aliases follow identifier format rules."""
         return _validate_alias_list(v, "Priority alias")
+
+    @property
+    def write_alias(self) -> str:
+        """Get the alias to use when writing to external systems.
+
+        Returns canonical_alias if set, otherwise the id.
+        """
+        return self.canonical_alias or self.id
 
 
 class BoardConfig(BaseModel):
@@ -419,8 +444,25 @@ class SltasksConfig(BaseModel):
     """Root configuration from sltasks.yml."""
 
     version: int = 1
+    provider: str = Field(
+        default="file",
+        description="Storage provider: file, github, github-prs, jira",
+    )
     task_root: str = Field(default=".tasks", description="Relative path to tasks directory")
     board: BoardConfig = Field(default_factory=BoardConfig.default)
+
+    # Valid provider values
+    VALID_PROVIDERS: ClassVar[tuple[str, ...]] = ("file", "github", "github-prs", "jira")
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        """Validate provider is a supported value."""
+        if v not in cls.VALID_PROVIDERS:
+            raise ValueError(
+                f"Invalid provider '{v}'. Must be one of: {', '.join(cls.VALID_PROVIDERS)}"
+            )
+        return v
 
     @field_validator("task_root")
     @classmethod
@@ -440,4 +482,4 @@ class SltasksConfig(BaseModel):
     @classmethod
     def default(cls) -> "SltasksConfig":
         """Return default configuration."""
-        return cls(board=BoardConfig.default())
+        return cls(provider="file", board=BoardConfig.default())

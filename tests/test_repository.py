@@ -100,11 +100,17 @@ class TestFilesystemRepository:
 
         saved = repo.save(task)
 
-        assert saved.filepath == task_dir / "new-task.md"
-        assert saved.filepath.exists()
+        # Verify provider_data is set
+        assert saved.provider_data is not None
+        assert saved.provider_data.provider == "file"
+
+        # Verify file exists (using repo.get_filepath helper)
+        filepath = repo.get_filepath(saved)
+        assert filepath == task_dir / "new-task.md"
+        assert filepath.exists()
 
         # Verify file contents
-        content = saved.filepath.read_text()
+        content = filepath.read_text()
         assert "title: New Task" in content
         assert "state: todo" in content
         assert "priority: high" in content

@@ -1,9 +1,10 @@
 """Task domain model."""
 
 from datetime import datetime
-from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from .provider_data import OptionalProviderData
 
 # State constants for common states
 STATE_TODO = "todo"
@@ -17,7 +18,7 @@ class Task(BaseModel):
 
     # Task identification
     id: str  # e.g., "fix-login-bug.md" (filesystem), "PROJ-123" (Jira), "#456" (GitHub)
-    filepath: Path | None = None  # Full path, set by repository (filesystem only)
+    provider_data: OptionalProviderData = None  # Provider-specific metadata
 
     # Front matter fields (all optional with defaults)
     title: str | None = None  # Defaults to filename without .md
@@ -65,12 +66,12 @@ class Task(BaseModel):
         task_id: str,
         metadata: dict,
         body: str,
-        filepath: Path | None = None,
+        provider_data: OptionalProviderData = None,
     ) -> "Task":
         """Create Task from parsed front matter."""
         return cls(
             id=task_id,
-            filepath=filepath,
+            provider_data=provider_data,
             title=metadata.get("title"),
             state=metadata.get("state", STATE_TODO),
             priority=metadata.get("priority", "medium"),

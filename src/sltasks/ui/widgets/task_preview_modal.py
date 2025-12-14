@@ -1,5 +1,7 @@
 """Task preview modal with syntax-highlighted markdown."""
 
+from pathlib import Path
+
 from rich.syntax import Syntax as RichSyntax
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -7,7 +9,7 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from ...models import Task
+from ...models import FileProviderData, Task
 
 
 class TaskPreviewModal(ModalScreen[bool]):
@@ -61,9 +63,10 @@ class TaskPreviewModal(ModalScreen[bool]):
     # Keys that should scroll content, not dismiss
     SCROLL_KEYS = {"up", "down", "pageup", "pagedown", "home", "end"}
 
-    def __init__(self, task_data: Task) -> None:
+    def __init__(self, task_data: Task, task_root: Path | None = None) -> None:
         super().__init__()
         self._task_data = task_data
+        self._task_root = task_root
 
     def compose(self) -> ComposeResult:
         content = self._read_file_content()
@@ -84,8 +87,16 @@ class TaskPreviewModal(ModalScreen[bool]):
 
     def _read_file_content(self) -> str:
         """Read the full file content including YAML front matter."""
-        if self._task_data.filepath and self._task_data.filepath.exists():
-            return self._task_data.filepath.read_text()
+        # Only filesystem tasks have readable files
+        if not isinstance(self._task_data.provider_data, FileProviderData):
+            return "(Preview not available for this provider)"
+
+        if self._task_root is None:
+            return "(File not found)"
+
+        filepath = self._task_root / self._task_data.id
+        if filepath.exists():
+            return filepath.read_text()
         return "(File not found)"
 
     def on_key(self, event) -> None:

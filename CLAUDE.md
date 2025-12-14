@@ -80,10 +80,11 @@ CLI (__main__.py) → App (app.py) → Services → Repository → Filesystem
 
 ### Key Models
 
-- `Task`: Pydantic model with frontmatter fields (title, state, priority, type, tags) and body content
+- `Task`: Pydantic model with frontmatter fields (title, state, priority, type, tags), body content, and `provider_data`
 - `Board`/`BoardOrder`: Board state with tasks grouped by column
 - `SltasksConfig`/`BoardConfig`/`ColumnConfig`/`TypeConfig`/`PriorityConfig`: Configuration hierarchy from `sltasks.yml`
 - `RepositoryProtocol`: Interface for task storage backends
+- `ProviderData`: Discriminated union of provider-specific data models (`FileProviderData`, `GitHubProviderData`, `GitHubPRProviderData`, `JiraProviderData`)
 
 ### Task File Format
 
@@ -155,9 +156,11 @@ Columns are configured in `sltasks.yml`:
 
 ### Design Decisions
 
-- **Repository Protocol**: `RepositoryProtocol` defines the interface for task storage backends (filesystem, future GitHub/Jira)
+- **Repository Protocol**: `RepositoryProtocol` defines the interface for task storage backends (filesystem, planned GitHub/Jira)
+- **Provider Data Pattern**: `Task.provider_data` uses a discriminated union for type-safe provider-specific metadata
 - **String-based states**: `Task.state` is a string, not an enum, to support custom columns
 - **String-based priorities**: `Task.priority` is a string with configurable `PriorityConfig` for colors/aliases
+- **Canonical aliases**: `TypeConfig` and `PriorityConfig` support `canonical_alias` for external system write-back
 - **No backwards compatibility shims**: Early project, remove deprecated code rather than maintain it
 
 ## Code Style

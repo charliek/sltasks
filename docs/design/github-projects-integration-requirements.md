@@ -43,15 +43,25 @@ This document outlines the requirements and design considerations for adding Git
 
 ### Current Architecture
 
-The `RepositoryProtocol` is already implemented in `src/sltasks/repositories/protocol.py`, defining the interface for task storage backends:
+The `RepositoryProtocol` is implemented in `src/sltasks/repositories/protocol.py`, defining the interface for task storage backends:
 
 ```
 CLI → App → Services → RepositoryProtocol ←─┬─ FilesystemRepository → Filesystem
-                ↓                           ├─ JiraRepository → Jira API (future)
-         UI (Textual)                       └─ GitHubProjectsRepository → GitHub GraphQL API (future)
+                ↓                           ├─ JiraRepository → Jira API (planned)
+         UI (Textual)                       ├─ GitHubProjectsRepository → GitHub GraphQL API (planned)
+                                            └─ GitHubPRRepository → GitHub REST API (planned)
 ```
 
-The protocol defines: `get_all()`, `get_by_id()`, `save()`, `delete()`, `get_board_order()`, `save_board_order()`, and `reload()`.
+The protocol defines: `get_all()`, `get_by_id()`, `save()`, `delete()`, `get_board_order()`, `save_board_order()`, `reload()`, `rename_in_board_order()`, and `validate()`.
+
+### Foundational Work Complete
+
+The following preparatory work has been completed to support GitHub integration:
+
+1. **Provider selection**: `SltasksConfig` now has a `provider` field ("file", "github", "github-prs", "jira")
+2. **Provider data model**: `Task.provider_data` uses a discriminated union pattern with typed models for each provider (`FileProviderData`, `GitHubProviderData`, `GitHubPRProviderData`, `JiraProviderData`)
+3. **Canonical aliases**: `TypeConfig` and `PriorityConfig` support `canonical_alias` for writing labels back to external systems
+4. **Provider validation**: `RepositoryProtocol.validate()` allows providers to verify configuration on startup
 
 ### Key Insight: Issues ARE Markdown
 
@@ -216,7 +226,7 @@ GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 | `created` | `issue.createdAt` | ISO datetime |
 | `updated` | `issue.updatedAt` | ISO datetime |
 | `body` | `issue.body` | Already markdown! |
-| `filepath` | N/A | Not applicable |
+| `provider_data` | Multiple IDs | `GitHubProviderData` with project_item_id, issue_node_id, etc. |
 
 ### Key Advantage: Body is Already Markdown
 

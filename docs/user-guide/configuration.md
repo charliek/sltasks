@@ -1,8 +1,26 @@
 # Configuration
 
-## Board configuration
+The `sltasks.yml` file defines your board configuration. Place it in your project root.
 
-The `sltasks.yml` file defines your board columns. Place it in your project root.
+## Full Configuration Reference
+
+```yaml
+version: 1
+provider: file       # Storage backend: file (default), github, github-prs, jira
+task_root: .tasks    # Directory for task files
+
+board:
+  columns:
+    # ... column definitions
+  types:
+    # ... type definitions
+  priorities:
+    # ... priority definitions
+```
+
+> **Note:** External providers (GitHub, Jira) are planned for future releases. Currently only `file` is supported.
+
+## Board configuration
 
 ### Column configuration
 

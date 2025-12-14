@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..models import Task
-from ..repositories import FilesystemRepository
+from ..models import FileProviderData, Task
+from ..repositories import RepositoryProtocol
 from ..utils import generate_filename, now_utc
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ class TaskService:
 
     def __init__(
         self,
-        repository: FilesystemRepository,
+        repository: RepositoryProtocol,
         config_service: ConfigService | None = None,
         template_service: TemplateService | None = None,
     ) -> None:
@@ -119,18 +120,31 @@ class TaskService:
         """Delete a task by ID."""
         self.repository.delete(task_id)
 
-    def rename_task_to_match_title(self, task_id: str) -> Task | None:
+    def rename_task_to_match_title(
+        self, task_id: str, task_root: Path | None = None
+    ) -> Task | None:
         """
         Rename a task file to match its current title.
 
         Reads the task, generates a new ID from the title,
-        and renames the file if needed.
+        and renames the file if needed. This is a filesystem-specific operation.
+
+        Args:
+            task_id: The current task ID (filename)
+            task_root: The task root directory (required for filesystem tasks)
 
         Returns the task with updated ID, or None if task not found.
         """
         task = self.repository.get_by_id(task_id)
         if task is None:
             return None
+
+        # This operation only makes sense for filesystem tasks
+        if not isinstance(task.provider_data, FileProviderData):
+            return task
+
+        if task_root is None:
+            return task
 
         # Generate filename from current title (use display_title which never returns None)
         new_task_id = generate_filename(task.display_title)
@@ -143,14 +157,14 @@ class TaskService:
         new_task_id = self._unique_filename(new_task_id)
 
         # Rename the file
-        if task.filepath and task.filepath.exists():
-            new_filepath = task.filepath.parent / new_task_id
-            task.filepath.rename(new_filepath)
+        filepath = task_root / task_id
+        if filepath.exists():
+            new_filepath = task_root / new_task_id
+            filepath.rename(new_filepath)
 
-            # Update task with new ID/filepath
+            # Update task with new ID
             old_task_id = task.id
             task.id = new_task_id
-            task.filepath = new_filepath
 
             # Update board order to reflect the rename
             self.repository.rename_in_board_order(old_task_id, new_task_id)
@@ -165,14 +179,27 @@ class TaskService:
         """Get all tasks."""
         return self.repository.get_all()
 
-    def open_in_editor(self, task: Task) -> bool:
+    def open_in_editor(self, task: Task, task_root: Path | None = None) -> bool:
         """
         Open task file in the user's editor.
 
+        This is a filesystem-specific operation. For non-filesystem tasks,
+        returns False.
+
+        Args:
+            task: The task to edit
+            task_root: The task root directory (required for filesystem tasks)
+
         Returns True if editor exited successfully.
         """
-        if task.filepath is None:
+        # Only filesystem tasks can be edited locally
+        if not isinstance(task.provider_data, FileProviderData):
             return False
+
+        if task_root is None:
+            return False
+
+        filepath = task_root / task.id
 
         # Try $EDITOR, then common fallbacks
         editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
@@ -190,7 +217,7 @@ class TaskService:
         import shlex
 
         editor_parts = shlex.split(editor)
-        editor_cmd = [*editor_parts, str(task.filepath.absolute())]
+        editor_cmd = [*editor_parts, str(filepath.absolute())]
 
         try:
             result = subprocess.run(

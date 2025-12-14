@@ -184,11 +184,12 @@ class SltasksApp(App):
         original_task_id = task.id
 
         # Open in editor
+        task_root = self.config_service.task_root
         with self.suspend():
-            self.task_service.open_in_editor(task)
+            self.task_service.open_in_editor(task, task_root)
 
         # Rename the file to match the (possibly updated) title
-        renamed_task = self.task_service.rename_task_to_match_title(original_task_id)
+        renamed_task = self.task_service.rename_task_to_match_title(original_task_id, task_root)
         task_id = renamed_task.id if renamed_task else original_task_id
 
         # Reload and refresh, focusing the new task
@@ -207,8 +208,9 @@ class SltasksApp(App):
             return
 
         # Suspend TUI and open editor
+        task_root = self.config_service.task_root
         with self.suspend():
-            self.task_service.open_in_editor(task)
+            self.task_service.open_in_editor(task, task_root)
 
         # Reload and refresh
         self.board_service.reload()
@@ -224,8 +226,9 @@ class SltasksApp(App):
         if task is None:
             return
 
+        task_root = self.config_service.task_root
         self.push_screen(  # pyrefly: ignore[no-matching-overload]
-            TaskPreviewModal(task),
+            TaskPreviewModal(task, task_root),
             callback=self._handle_preview_result,
         )
 
@@ -243,8 +246,9 @@ class SltasksApp(App):
             return
 
         # Open in external editor
+        task_root = self.config_service.task_root
         with self.suspend():
-            self.task_service.open_in_editor(task)
+            self.task_service.open_in_editor(task, task_root)
 
         # Reload and refresh
         self.board_service.reload()

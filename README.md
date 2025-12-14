@@ -157,6 +157,7 @@ Create `sltasks.yml` in your project root to customize columns and task types:
 
 ```yaml
 version: 1
+provider: file       # Storage backend (file is default; github, jira planned)
 task_root: .tasks
 board:
   columns:

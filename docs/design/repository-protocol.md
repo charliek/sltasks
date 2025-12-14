@@ -7,8 +7,9 @@ This document describes the repository protocol that enables sltasks to support 
 The `RepositoryProtocol` defines a contract for task storage backends. This allows the application to work with different data sources:
 
 - **Filesystem** - Markdown files with YAML frontmatter (current implementation)
-- **GitHub Projects** - GitHub project items via GraphQL API (future)
-- **Jira** - Jira issues via REST API (future)
+- **GitHub Projects** - GitHub project items via GraphQL API (planned)
+- **GitHub PRs** - Pull requests via REST API (planned)
+- **Jira** - Jira issues via REST API (planned)
 
 ## Protocol Definition
 
@@ -42,6 +43,17 @@ class RepositoryProtocol(Protocol):
 
     def reload(self) -> None:
         """Clear caches and reload from source."""
+        ...
+
+    def rename_in_board_order(self, old_task_id: str, new_task_id: str) -> None:
+        """Rename a task in the board order (filesystem-specific)."""
+        ...
+
+    def validate(self) -> tuple[bool, str | None]:
+        """Validate provider connectivity and configuration.
+
+        Returns (is_valid, error_message_if_invalid).
+        """
         ...
 ```
 
@@ -78,12 +90,13 @@ Returns a single task by its identifier, or `None` if not found.
 
 ### `save(task)`
 
-Creates a new task or updates an existing one. Returns the saved task, which may have updated fields (e.g., `filepath` for filesystem, `updated` timestamp).
+Creates a new task or updates an existing one. Returns the saved task, which may have updated fields (e.g., `provider_data` for filesystem, `updated` timestamp).
 
 **Implementation notes:**
 - Should update `task.updated` timestamp automatically
 - For new tasks, should add to board order in the appropriate column
 - For existing tasks, should not change board order position
+- Should set appropriate `provider_data` for the backend
 
 ### `delete(task_id)`
 
@@ -117,6 +130,70 @@ Clears internal caches and forces a fresh load from the backend.
 - Should be called after external changes (e.g., file edits, API updates)
 - Next `get_all()` call should return fresh data
 
+### `rename_in_board_order(old_task_id, new_task_id)`
+
+Renames a task ID in the board order. This is primarily used by the filesystem provider when task files are renamed to match their title.
+
+**Implementation notes:**
+- Should update all references in board order from old_task_id to new_task_id
+- Called by TaskService.rename_task_to_match_title()
+- Non-filesystem providers may implement as no-op
+
+### `validate()`
+
+Validates provider connectivity and configuration. Returns a tuple of `(is_valid, error_message)`.
+
+**Implementation notes:**
+- Filesystem: Validates directory is accessible and writable
+- Remote providers: Validates credentials, connectivity, and resource access
+- Should be called during startup to catch configuration errors early
+- Returns `(True, None)` on success, `(False, "error message")` on failure
+
+## Provider Data
+
+Tasks include a `provider_data` field containing backend-specific metadata. This uses a discriminated union pattern:
+
+```python
+from typing import Literal
+from pydantic import BaseModel
+
+class FileProviderData(BaseModel):
+    """Provider data for filesystem tasks."""
+    provider: Literal["file"] = "file"
+    # filepath is derived from task.id + task_root
+
+class GitHubProviderData(BaseModel):
+    """Provider data for GitHub Projects tasks."""
+    provider: Literal["github"] = "github"
+    project_item_id: str          # For GraphQL mutations
+    issue_node_id: str            # For GraphQL queries
+    repository: str               # "owner/repo"
+    issue_number: int
+    type_label: str | None = None
+    priority_label: str | None = None
+
+class GitHubPRProviderData(BaseModel):
+    """Provider data for GitHub PR tasks."""
+    provider: Literal["github-prs"] = "github-prs"
+    owner: str
+    repo: str
+    pr_number: int
+    head_branch: str
+    base_branch: str
+    author: str
+    # ... additional PR-specific fields
+
+class JiraProviderData(BaseModel):
+    """Provider data for Jira tasks."""
+    provider: Literal["jira"] = "jira"
+    issue_key: str                # "PROJ-123"
+    project_key: str              # "PROJ"
+
+ProviderData = FileProviderData | GitHubProviderData | GitHubPRProviderData | JiraProviderData
+```
+
+This allows type-safe access to provider-specific fields while keeping the Task model generic.
+
 ## Filesystem Implementation
 
 The `FilesystemRepository` is the reference implementation:
@@ -125,13 +202,46 @@ The `FilesystemRepository` is the reference implementation:
 - Board order is stored in `tasks.yaml`
 - File state is the source of truth (overrides YAML column placement)
 - State aliases are normalized on load
+- Tasks receive `FileProviderData` with `provider="file"`
+- Filepath is derived from `task_root / task.id`
 
 ### Additional Filesystem-Specific Methods
 
 The filesystem implementation includes methods not in the protocol:
 
 - `ensure_directory()` - Creates the task directory if needed
-- `rename_in_board_order(old_id, new_id)` - Handles task file renames
+- `get_filepath(task)` - Returns the full path to a task file
+
+## Configuration
+
+The `SltasksConfig` model includes a `provider` field to select the backend:
+
+```yaml
+version: 1
+provider: file  # "file", "github", "github-prs", or "jira"
+task_root: .tasks
+board:
+  # ... column and type configuration
+```
+
+### Canonical Aliases for External Providers
+
+When writing back to external systems (GitHub labels, Jira fields), types and priorities can specify a `canonical_alias` - the exact string to use when writing:
+
+```yaml
+board:
+  types:
+    - id: bug
+      type_alias: [Bug, Defect, bug-label]
+      canonical_alias: bug-label  # Use this when writing to GitHub
+
+  priorities:
+    - id: high
+      priority_alias: [P1, priority:high]
+      canonical_alias: priority:high  # Use this when writing to GitHub
+```
+
+If `canonical_alias` is not set, the `id` is used for write operations.
 
 ## Future Extensions
 

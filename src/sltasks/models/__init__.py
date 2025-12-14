@@ -1,6 +1,14 @@
 """Data models."""
 
 from .board import Board, BoardOrder
+from .provider_data import (
+    FileProviderData,
+    GitHubProviderData,
+    GitHubPRProviderData,
+    JiraProviderData,
+    OptionalProviderData,
+    ProviderData,
+)
 from .sltasks_config import (
     BoardConfig,
     ColumnConfig,
@@ -25,7 +33,13 @@ __all__ = [
     "BoardConfig",
     "BoardOrder",
     "ColumnConfig",
+    "FileProviderData",
+    "GitHubPRProviderData",
+    "GitHubProviderData",
+    "JiraProviderData",
+    "OptionalProviderData",
     "PriorityConfig",
+    "ProviderData",
     "SltasksConfig",
     "Task",
     "TypeConfig",

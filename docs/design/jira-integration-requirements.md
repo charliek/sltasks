@@ -34,17 +34,27 @@ CLI → App → Services → FilesystemRepository → Filesystem
 
 ### Current Architecture
 
-The `RepositoryProtocol` is already implemented in `src/sltasks/repositories/protocol.py`:
+The `RepositoryProtocol` is implemented in `src/sltasks/repositories/protocol.py`:
 
 ```
 CLI → App → Services → RepositoryProtocol ←─┬─ FilesystemRepository → Filesystem
-                ↓                           │
-         UI (Textual)                       └─ JiraRepository → Jira REST API (future)
+                ↓                           ├─ JiraRepository → Jira REST API (this document)
+         UI (Textual)                       ├─ GitHubProjectsRepository → GitHub GraphQL API (planned)
+                                            └─ GitHubPRRepository → GitHub REST API (planned)
 ```
+
+### Foundational Work Complete
+
+The following preparatory work has been completed to support Jira integration:
+
+1. **Provider selection**: `SltasksConfig.provider` supports "jira" value
+2. **Provider data model**: `JiraProviderData` is defined with `issue_key` and `project_key` fields
+3. **Canonical aliases**: `TypeConfig` and `PriorityConfig` support `canonical_alias` for writing values back to Jira
+4. **Provider validation**: `RepositoryProtocol.validate()` enables startup credential and connectivity checks
 
 ### Key Insight
 
-The service layer (TaskService, BoardService) remains unchanged. They interact with the `RepositoryProtocol` interface, which can be backed by either filesystem or Jira.
+The service layer (TaskService, BoardService) remains unchanged. They interact with the `RepositoryProtocol` interface, which can be backed by any provider.
 
 ---
 
@@ -134,7 +144,7 @@ JIRA_AUTH=user@company.com:api-token
 | `created` | `created` | ISO datetime |
 | `updated` | `updated` | ISO datetime |
 | `body` | `description` | Markdown ↔ Jira markup conversion |
-| `filepath` | N/A | Not applicable for Jira |
+| `provider_data` | Issue metadata | `JiraProviderData` with issue_key and project_key |
 
 ### Priority Mapping
 

@@ -82,3 +82,33 @@ class RepositoryProtocol(Protocol):
         Call this after external changes to ensure fresh data.
         """
         ...
+
+    def rename_in_board_order(self, old_task_id: str, new_task_id: str) -> None:
+        """Rename a task in the board order.
+
+        This is primarily used for filesystem repositories when a task file
+        is renamed to match its title.
+
+        Args:
+            old_task_id: The previous task ID
+            new_task_id: The new task ID
+        """
+        ...
+
+    def validate(self) -> tuple[bool, str | None]:
+        """Validate provider connectivity and configuration.
+
+        This method allows providers to verify their configuration is correct
+        and they can connect to their backend (if applicable).
+
+        Returns:
+            A tuple of (is_valid, error_message).
+            - (True, None) if validation passes
+            - (False, "error description") if validation fails
+
+        Examples:
+            - Filesystem: Always returns (True, None)
+            - GitHub: Validates token and project access
+            - Jira: Validates credentials and board access
+        """
+        ...

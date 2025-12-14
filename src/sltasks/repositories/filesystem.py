@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import frontmatter
 import yaml
 
-from ..models import BoardOrder, Task
+from ..models import BoardOrder, FileProviderData, Task
 from ..models.sltasks_config import BoardConfig
 
 if TYPE_CHECKING:
@@ -65,6 +65,13 @@ class FilesystemRepository:
             return None
         return self._parse_task_file(filepath)
 
+    def get_filepath(self, task: Task) -> Path:
+        """Get the filesystem path for a task.
+
+        For filesystem tasks, the path is derived from task_root + task.id.
+        """
+        return self.task_root / task.id
+
     def save(self, task: Task) -> Task:
         """
         Save a task to the filesystem.
@@ -74,8 +81,11 @@ class FilesystemRepository:
         """
         self.ensure_directory()
 
-        filepath = self.task_root / task.id
-        task.filepath = filepath
+        filepath = self.get_filepath(task)
+
+        # Set provider data if not already set
+        if task.provider_data is None:
+            task.provider_data = FileProviderData()
 
         # Build front matter document
         post = frontmatter.Post(task.body)
@@ -141,6 +151,22 @@ class FilesystemRepository:
         self._tasks.clear()
         self._board_order = None
 
+    def validate(self) -> tuple[bool, str | None]:
+        """Validate filesystem repository configuration.
+
+        For filesystem, we check that the task_root directory is accessible.
+
+        Returns:
+            (True, None) - Filesystem repository is always valid if task_root exists
+                          or can be created.
+        """
+        try:
+            # Ensure directory can be created if it doesn't exist
+            self.ensure_directory()
+            return (True, None)
+        except (OSError, PermissionError) as e:
+            return (False, f"Cannot access task directory: {e}")
+
     # --- Private Methods ---
 
     def _load_tasks(self) -> None:
@@ -167,7 +193,7 @@ class FilesystemRepository:
                 task_id=filepath.name,
                 metadata=post.metadata,
                 body=post.content,
-                filepath=filepath,
+                provider_data=FileProviderData(),
             )
 
             # Normalize alias states to canonical column IDs
