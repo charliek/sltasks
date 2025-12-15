@@ -20,6 +20,16 @@ class Settings(BaseSettings):
         description="Editor for task editing",
     )
 
+    verbose: int = Field(
+        default=0,
+        description="Verbosity level (0=off, 1=INFO, 2+=DEBUG)",
+    )
+
+    log_file: Path | None = Field(
+        default=None,
+        description="Optional path to write logs to file",
+    )
+
     model_config = {
         "env_prefix": "KOSMOS_",
     }

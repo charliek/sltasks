@@ -25,6 +25,10 @@ uv run sltasks --task-root /path/to/project
 # Generate default config file
 uv run sltasks --generate
 
+# Interactive GitHub Projects setup
+uv run sltasks --github-setup
+uv run sltasks --github-setup https://github.com/users/USER/projects/1
+
 # Run tests
 uv run pytest
 
@@ -66,8 +70,9 @@ CLI (__main__.py) → App (app.py) → Services → Repository → Filesystem
   - `FilterService`: Parses filter expressions, applies filters to task lists
   - `TemplateService`: Loads task templates, merges template frontmatter with new tasks
 - **Repository Layer** (`repositories/`): Task storage backends
-  - `RepositoryProtocol`: Interface for storage backends (supports filesystem, future GitHub/Jira)
+  - `RepositoryProtocol`: Interface for storage backends (supports filesystem, GitHub)
   - `FilesystemRepository`: File I/O, manages task files and `tasks.yaml` ordering
+  - `GitHubProjectsRepository`: GitHub Projects V2 integration via GraphQL API
 - **UI Layer** (`ui/`): Textual screens and widgets
 
 ### Data Flow
@@ -117,6 +122,19 @@ Columns are configured in `sltasks.yml`:
 - 2-6 columns allowed
 - `archived` is reserved and cannot be used as a column ID
 - Default: todo, in_progress, done
+
+### GitHub Provider
+
+To use GitHub Projects as the task backend, run `sltasks --github-setup`:
+- Columns are auto-detected from the GitHub Status field (e.g., "In Progress" → `in_progress`)
+- Priority can come from a project field (e.g., "Priority") or from issue labels
+- Type and priority labels use `canonical_alias` for write-back to GitHub labels
+
+Key `GitHubConfig` fields:
+- `project_url`: GitHub project URL (user or org)
+- `default_repo`: Repository for new issues (owner/repo)
+- `default_status`: Status for new issues
+- `priority_field`: Optional single-select field for priority
 
 ## Key Keybindings (for context)
 

@@ -2,31 +2,34 @@
 
 ## Overview
 
-This document outlines the requirements and design considerations for adding GitHub Projects as an alternative backend repository for sltasks. This is a companion document to the Jira integration requirements, analyzing the feasibility and approach for GitHub's project management system.
+This document outlines the requirements and design for adding GitHub Projects as an alternative backend for sltasks. The integration provides a **hybrid model** where GitHub is the source of truth, while the filesystem serves as a cache for offline viewing and a workspace for creating issues from local files (e.g., LLM-generated).
 
-## Executive Summary: GitHub vs Jira Comparison
+## Key Design Decisions
 
-| Aspect | GitHub Projects | Jira |
-|--------|-----------------|------|
-| **API Type** | GraphQL (primary), REST (new, limited) | REST |
-| **Authentication** | PAT or GitHub App token | Email + API token |
-| **Rate Limits** | 5,000 points/hour (cost-based) | ~100 requests/minute |
-| **Column/Status** | Custom fields (SingleSelect) | Workflow statuses |
-| **Ordering** | Native position API | Rank field |
-| **Item Types** | Issues, PRs, Draft Issues | Issues only |
-| **Complexity** | Medium | Higher (workflows) |
-| **Offline editing** | Yes (issues are markdown) | No |
-
-**Verdict:** GitHub Projects is **easier to integrate** than Jira due to simpler status management (no workflows), native item ordering API, and issues already being markdown-based.
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Architecture | Separate `github` provider | Can share code with `file` provider but distinct behavior |
+| Source of truth | GitHub when online | Filesystem serves as cache and workspace for LLM/offline access |
+| Display format | `owner/repo#123` | Clear context for multi-repo projects |
+| Edit workflow | Temp file + $EDITOR | Consistent with `gh issue edit` workflow |
+| Sync timing | Startup + manual refresh (`r`) | Fresh data at launch, user control during session |
+| Push UI | Inline indicators + dedicated sync screen | Quick status view + bulk review capability |
+| Create from file | Auto-detect new files, review before push | LLMs can write issues as files, user confirms push |
+| After push | Rename to `owner-repo#123-slug.md` | Clear visual indicator of GitHub-managed files |
+| Target repo | Default from config, per-file override | Flexible for multi-repo projects |
+| Sync filters | Filter list (OR'd together) | Readable config, easy to add/remove criteria |
+| Enterprise | Supported via `base_url` config | Minimal complexity, enables work use cases |
 
 ---
 
 ## Goals
 
-1. **Read GitHub Project boards** - Display issues/PRs from a GitHub Project in the sltasks TUI
-2. **Manage item state** - Move items between columns via the TUI
-3. **Basic CRUD** - Create issues, edit details, view content
-4. **Leverage existing GitHub workflow** - Issues are already markdown, minimal friction
+1. **View GitHub Project boards** - Display issues/PRs from a GitHub Project in the sltasks TUI
+2. **Full state management** - Move items between columns, reorder within columns
+3. **Full CRUD** - Create issues, edit details, view content, archive/close
+4. **Create issues from local files** - Write .md files locally (or via LLM), push to GitHub
+5. **Filesystem sync** - Cache issues locally for offline viewing and LLM access
+6. **GitHub Enterprise support** - Work with self-hosted GitHub instances
 
 ## Non-Goals (MVP)
 
@@ -36,121 +39,62 @@ This document outlines the requirements and design considerations for adding Git
 - Multiple project support in single view
 - Milestone/Sprint management
 - Sub-issues / task lists
+- Real-time sync (webhooks)
 
 ---
 
-## Architecture Overview
+## Phased Implementation
 
-### Current Architecture
+### Phase 1: GitHub-Only (Online Mode)
 
-The `RepositoryProtocol` is implemented in `src/sltasks/repositories/protocol.py`, defining the interface for task storage backends:
+**Goal:** View and manage GitHub Project issues in the TUI without filesystem sync.
 
-```
-CLI → App → Services → RepositoryProtocol ←─┬─ FilesystemRepository → Filesystem
-                ↓                           ├─ JiraRepository → Jira API (planned)
-         UI (Textual)                       ├─ GitHubProjectsRepository → GitHub GraphQL API (planned)
-                                            └─ GitHubPRRepository → GitHub REST API (planned)
-```
+**Scope:**
+- GitHub GraphQL client with authentication (token or `gh` CLI)
+- Enterprise support via configurable `base_url`
+- Fetch project metadata and Status field configuration
+- Fetch and display issues/PRs as Tasks
+- Move issues between columns (update Status field)
+- Reorder within columns
+- Create new issues (via TUI, prompts for title/body)
+- Edit issues (fetch body → temp file → $EDITOR → push back)
+- Manual refresh keybinding (`r`)
+- Display format: `owner/repo#123`
 
-The protocol defines: `get_all()`, `get_by_id()`, `save()`, `delete()`, `get_board_order()`, `save_board_order()`, `reload()`, `rename_in_board_order()`, and `validate()`.
+**Not in Phase 1:**
+- Filesystem cache/sync
+- Create from local file
+- Offline mode
 
-### Foundational Work Complete
+### Phase 2: Filesystem Sync
 
-The following preparatory work has been completed to support GitHub integration:
+**Goal:** Add bidirectional sync between GitHub and local filesystem.
 
-1. **Provider selection**: `SltasksConfig` now has a `provider` field ("file", "github", "github-prs", "jira")
-2. **Provider data model**: `Task.provider_data` uses a discriminated union pattern with typed models for each provider (`FileProviderData`, `GitHubProviderData`, `GitHubPRProviderData`, `JiraProviderData`)
-3. **Canonical aliases**: `TypeConfig` and `PriorityConfig` support `canonical_alias` for writing labels back to external systems
-4. **Provider validation**: `RepositoryProtocol.validate()` allows providers to verify configuration on startup
-
-### Key Insight: Issues ARE Markdown
-
-Unlike Jira, GitHub Issues are already markdown documents with a title and body. This maps almost perfectly to sltasks' Task model, making the integration more natural.
-
----
-
-## API Analysis
-
-### GraphQL API (Primary - Required)
-
-GitHub Projects V2 requires the GraphQL API for most operations. There is no REST API for the core project management features (though a limited REST API was added in September 2025).
-
-#### Required Queries
-
-| Operation | GraphQL Query/Mutation | Notes |
-|-----------|----------------------|-------|
-| List projects | `organization.projectsV2` or `user.projectsV2` | Paginated, max 100 |
-| Get project | `node(id: PROJECT_ID)` | By node ID |
-| Get fields | `project.fields(first: 20)` | Includes Status field |
-| Get items | `project.items(first: 100)` | Issues, PRs, drafts |
-| Get issue details | `node(id: ISSUE_ID)` on `Issue` | Full issue content |
-
-#### Required Mutations
-
-| Operation | GraphQL Mutation | Notes |
-|-----------|-----------------|-------|
-| Add issue to project | `addProjectV2ItemById` | Returns item ID |
-| Update field value | `updateProjectV2ItemFieldValue` | For Status changes |
-| Reorder item | `updateProjectV2ItemPosition` | Move within column |
-| Remove from project | `deleteProjectV2Item` | Doesn't delete issue |
-| Create issue | `createIssue` (Issues API) | Separate from Projects |
-| Update issue | `updateIssue` (Issues API) | Title, body, labels |
-
-#### Critical Constraint
-
-> "You cannot add and update an item in the same call. You must use `addProjectV2ItemById` to add the item and then use `updateProjectV2ItemFieldValue` to update the item."
-
-This means creating a new task requires two API calls: create issue → add to project → update status.
-
-### REST API (New - September 2025)
-
-A REST API for GitHub Projects was released, supporting:
-- List projects and project details
-- Add/delete issues and PRs from projects
-- Update field values
-
-This could simplify some operations but may not cover all needs. Evaluate during implementation.
-
-### Authentication
-
-```bash
-# Personal Access Token (classic or fine-grained)
-GITHUB_TOKEN=ghp_xxxxxxxxxxxx
-
-# Required scopes:
-# - read:project (queries)
-# - project (mutations)
-# - repo (for issue operations)
-```
-
-GitHub CLI (`gh`) can also provide authentication, which users may already have configured.
-
-### Rate Limits
-
-| Limit Type | Value | Notes |
-|------------|-------|-------|
-| Primary | 5,000 points/hour | Cost-based, not request-based |
-| Concurrent | 100 requests | Shared with REST |
-| Per-minute | 2,000 points | Secondary limit |
-| Pagination | 100 items max | Per connection |
-| Total nodes | 500,000 per query | Query complexity limit |
-
-Rate limits are more generous than Jira but use a cost-based system where complex queries consume more points.
+**Scope:**
+- Sync from GitHub on startup (configurable filter list)
+- Write fetched issues to `.tasks/` as markdown files
+- Detect new local files (no GitHub metadata) as "local-only"
+- Detect modified local files (edited since last sync) as "modified"
+- Inline sync status indicators on task cards
+- Dedicated sync screen to review pending changes
+- Push selected new/modified files to GitHub
+- After push, rename file to `owner-repo#123-slug.md` format
+- Validate target repo against allowed repos
+- Conflict handling: GitHub wins by default, user marks file for push via `push_changes: true`
+- CLI commands: `sltasks sync`, `sltasks push`, with `--dry-run` option
+- Multi-repo push support (files targeting different repos in one operation)
 
 ---
 
 ## Configuration Design
 
-### sltasks.yml Extensions
+### sltasks.yml
 
 ```yaml
 version: 1
+provider: github  # "file", "github", "github-prs", "jira"
 
-# Backend selection
-backend: github  # or "filesystem" or "jira"
-
-# Existing filesystem config
-task_root: .tasks
+# Existing board config applies to all providers
 board:
   columns:
     - id: todo
@@ -160,25 +104,32 @@ board:
     - id: done
       title: Done
 
-# GitHub Projects configuration
+# GitHub-specific configuration
 github:
+  # API target (defaults to api.github.com)
+  base_url: api.github.com  # or "github.mycompany.com" for Enterprise
+
   # Project identification (one required)
   project_url: "https://github.com/orgs/myorg/projects/5"
   # OR explicit specification:
-  owner: myorg           # org or username
-  owner_type: org        # "org" or "user"
-  project_number: 5
+  # owner: myorg
+  # owner_type: org  # "org" or "user"
+  # project_number: 5
 
-  # Optional: specific repository for new issues
+  # Default repository for new issues
   default_repo: myorg/myrepo
 
-  # Column mapping (optional - auto-detects from project if omitted)
-  # Maps sltasks column IDs to GitHub Project Status field options
+  # Allowed repositories (auto-detected from project if omitted)
+  # Used to validate per-file repo overrides
+  allowed_repos:
+    - myorg/repo1
+    - myorg/repo2
+
+  # Column mapping (optional - auto-detects from project Status field)
   column_mapping:
     todo:
       - "Todo"
       - "Backlog"
-      - "New"
     in_progress:
       - "In Progress"
       - "In Review"
@@ -186,10 +137,25 @@ github:
       - "Done"
       - "Closed"
 
-  # Filter options
+  # Include options
   include_closed: false      # Include closed issues (default: false)
   include_prs: true          # Include pull requests (default: true)
   include_drafts: false      # Include draft issues (default: false)
+
+  # Filesystem sync configuration (Phase 2)
+  sync:
+    enabled: true
+    task_root: .tasks  # Where to write synced files
+
+    # Filters OR'd together - issue syncs if it matches ANY filter
+    filters:
+      - "assignee:@me"           # All my issues
+      - "priority:high"          # All high priority
+      - "label:urgent"           # Anything labeled urgent
+
+    # Special filter values:
+    # "*" or omit filters entirely = sync all issues on board
+    # "assignee:@me" = current authenticated user
 ```
 
 ### Environment Variables
@@ -200,290 +166,209 @@ GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 
 # Option 2: Use GitHub CLI authentication (if installed)
 # sltasks can shell out to `gh auth token` to get the token
+
+# Required scopes:
+# - read:project (queries)
+# - project (mutations)
+# - repo (for issue operations)
 ```
 
-### Why This Approach?
+### Enterprise Support
 
-1. **Project URL is intuitive** - Users can copy from browser
-2. **Auto-detect columns** - Fetch Status field options from project
-3. **Flexible filtering** - Users control what appears on board
-4. **GitHub CLI integration** - Leverage existing auth if available
+GitHub Enterprise is supported by setting `base_url`:
+
+```yaml
+github:
+  base_url: github.mycompany.com
+  project_url: "https://github.mycompany.com/orgs/myorg/projects/5"
+```
+
+The GraphQL schema is nearly identical, so all features work on both.
 
 ---
 
-## Data Model Mapping
+## Data Model
 
-### Task ↔ GitHub Issue/PR
+### Task ↔ GitHub Issue/PR Mapping
 
 | Task Field | GitHub Field | Notes |
 |------------|--------------|-------|
-| `id` | `issue.number` | e.g., "123" or "owner/repo#123" |
+| `id` | Display: `owner/repo#123` | Internal: issue_node_id for queries |
 | `title` | `issue.title` | Direct mapping |
 | `state` | Project Status field | Via `ProjectV2ItemFieldSingleSelectValue` |
 | `priority` | Labels (convention) | e.g., "priority:high" label |
-| `tags` | `issue.labels` | Direct mapping |
+| `tags` | `issue.labels` | Direct mapping (minus type/priority labels) |
 | `type` | Labels (convention) | e.g., "bug", "feature" labels |
 | `created` | `issue.createdAt` | ISO datetime |
 | `updated` | `issue.updatedAt` | ISO datetime |
 | `body` | `issue.body` | Already markdown! |
-| `provider_data` | Multiple IDs | `GitHubProviderData` with project_item_id, issue_node_id, etc. |
+| `provider_data` | `GitHubProviderData` | project_item_id, issue_node_id, repository, issue_number |
 
-### Key Advantage: Body is Already Markdown
+### GitHubProviderData
 
-GitHub Issues use markdown natively. No conversion needed unlike Jira's ADF format.
-
-### Item Identification
-
-GitHub Projects items have multiple IDs:
-- **Issue number**: `#123` (human-readable, repo-scoped)
-- **Issue node ID**: `I_kwDOABC...` (global, for GraphQL)
-- **Project item ID**: `PVTI_...` (project-scoped, for mutations)
-
-We need to track both the issue identifier and the project item ID.
-
-### Priority via Labels
-
-GitHub doesn't have a native priority field. sltasks now supports configurable priorities with aliases, making GitHub label mapping straightforward:
-
-```yaml
-board:
-  priorities:
-    - id: critical
-      label: Critical
-      color: red
-      priority_alias:
-        - P0
-        - priority:critical
-    - id: high
-      label: High
-      color: orange1
-      priority_alias:
-        - P1
-        - priority:high
-    - id: medium
-      label: Medium
-      color: yellow
-      priority_alias:
-        - P2
-        - priority:medium
-    - id: low
-      label: Low
-      color: green
-      priority_alias:
-        - P3
-        - priority:low
+```python
+class GitHubProviderData(BaseModel):
+    provider: Literal["github"] = "github"
+    project_item_id: str      # "PVTI_..." for GraphQL mutations
+    issue_node_id: str        # "I_kw..." for issue queries
+    repository: str           # "owner/repo"
+    issue_number: int         # 123
+    type_label: str | None    # Label used for type (for roundtrip)
+    priority_label: str | None # Label used for priority (for roundtrip)
 ```
 
-The `priority_alias` field maps GitHub label conventions to sltasks priority IDs. When loading issues, labels matching any alias are resolved to the canonical priority ID.
+### Display Format
 
-### Task Type via Labels
+Issues are displayed with full repository context:
 
-Similar to priority, use labels:
-- `type:bug` or `bug`
-- `type:feature` or `feature`
-- `type:task` or `task`
-
----
-
-## Feature Mapping
-
-### What Works Naturally
-
-| sltasks Feature | GitHub Equivalent | Complexity |
-|-----------------|-------------------|------------|
-| View board | Project items query | Low |
-| Move between columns | Update Status field | Low |
-| Edit task title | Update issue title | Low |
-| Edit task body | Update issue body | Low |
-| Create task | Create issue + add to project | Medium |
-| Filter by tag | Labels in query | Low |
-| Filter by type | Labels in query | Low |
-| Reorder within column | `updateProjectV2ItemPosition` | Low |
-| Archive | Close issue or remove from project | Low |
-| Delete | Close issue (or actually delete) | Low |
-
-### What's Different
-
-| Feature | Difference | Proposed Handling |
-|---------|-----------|-------------------|
-| **External editor** | Issues are in GitHub, not local files | Fetch body → temp file → edit → push back |
-| **New task** | Must specify repository | Use `default_repo` config or prompt |
-| **Filename** | Issues use numbers, not slugs | Display as `repo#123` or just `#123` |
-| **Archive** | No direct equivalent | Close issue and/or remove from project |
-| **Priority** | No native field | Use labels with configurable patterns |
-
-### External Editor Workflow
-
-Unlike filesystem where you edit .md files directly:
-
-1. Fetch issue body from GitHub
-2. Write to temp file (e.g., `/tmp/sltasks-issue-123.md`)
-3. Open in `$EDITOR`
-4. On save, detect changes and push back to GitHub
-5. Clean up temp file
-
-This is similar to `gh issue edit --editor`.
-
----
-
-## Challenges and Solutions
-
-### Challenge 1: GraphQL Complexity
-
-**Problem:** GraphQL requires building complex queries with proper field selection.
-
-**Solution:**
-- Use a thin GraphQL client (httpx + query strings)
-- Pre-define query templates for common operations
-- Consider using `gql` library for validation
-
-### Challenge 2: Node IDs
-
-**Problem:** GitHub uses opaque node IDs that aren't human-readable.
-
-**Solution:**
-- Cache node ID ↔ issue number mappings
-- Store project item IDs for each issue
-- Display human-readable `#123` to users
-
-### Challenge 3: Multi-Repository Projects
-
-**Problem:** A GitHub Project can contain issues from multiple repositories.
-
-**Solution:**
-- Track `owner/repo` for each issue
-- Display repository context in UI if mixed
-- For new issues, require `default_repo` or prompt
-
-### Challenge 4: Status Field Discovery
-
-**Problem:** Need to find the Status field and its options.
-
-**Solution:**
-```graphql
-query {
-  node(id: "PROJECT_ID") {
-    ... on ProjectV2 {
-      fields(first: 20) {
-        nodes {
-          ... on ProjectV2SingleSelectField {
-            id
-            name
-            options { id name }
-          }
-        }
-      }
-    }
-  }
-}
 ```
-Find field where `name == "Status"`, cache field ID and option IDs.
+owner/repo#123 - Fix login validation bug
+```
 
-### Challenge 5: Closed Issues
+Used in:
+- Task cards in the TUI
+- Local file names after sync: `owner-repo#123-fix-login-bug.md`
+- Status messages and logs
 
-**Problem:** Should closed issues appear? In what column?
+### Local File Frontmatter (Sync Mode)
 
-**Solution:**
-- Config option `include_closed: false` (default)
-- If included, map to "done" column or based on last status
+```markdown
+---
+title: Fix login validation bug
+state: todo
+priority: high
+type: bug
+tags:
+  - auth
+  - validation
+
+# GitHub sync metadata (managed by sltasks)
+github:
+  synced: true
+  issue_number: 123
+  repository: myorg/myrepo
+  project_item_id: PVTI_xxx
+  issue_node_id: I_xxx
+  last_synced: '2025-01-15T12:00:00Z'
+
+# User-controlled flags
+push_changes: false  # Set to true to push local edits to GitHub
+---
+
+Bug description here...
+```
+
+**Sync status rules:**
+- No `github:` section → local-only file, can be pushed as new issue
+- `github.synced: true` + no local edits → fully synced
+- `github.synced: true` + local edits + `push_changes: false` → modified but GitHub wins
+- `github.synced: true` + local edits + `push_changes: true` → will push to GitHub
+
+### File Naming Convention
+
+After pushing a new local file to GitHub:
+
+```
+fix-login-bug.md  →  myorg-myrepo#123-fix-login-bug.md
+```
+
+Format: `{owner}-{repo}#{issue_number}-{original-slug}.md`
 
 ---
 
-## MVP Scope
+## UI/UX Design
 
-### Phase 1: Read-Only Board View
+### Sync Status Indicators (Inline)
 
-- [ ] Parse GitHub config from sltasks.yml
-- [ ] Authenticate with GitHub token (env var or gh CLI)
-- [ ] Fetch project metadata and Status field configuration
-- [ ] Fetch project items (issues/PRs)
-- [ ] Map to Task model
-- [ ] Display in TUI
-- [ ] Navigation and basic filtering
+Task cards show sync status (Phase 2):
+- `[local]` - Local-only file, not on GitHub
+- `[modified]` - Local edits pending (`push_changes: true`)
+- `[synced]` - Fully synced with GitHub
+- No indicator - GitHub-only mode (Phase 1)
 
-### Phase 2: State Management
+### Dedicated Sync Screen
 
-- [ ] Move items between columns (update Status field)
-- [ ] Reorder items within column (updateProjectV2ItemPosition)
-- [ ] Handle errors gracefully (permission denied, etc.)
+Accessed via `S` keybinding or `sltasks sync` command:
 
-### Phase 3: CRUD Operations
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Sync Status                                          [ESC] │
+├─────────────────────────────────────────────────────────────┤
+│ New Local Files (will create issues):                       │
+│   [x] fix-login-bug.md → myorg/myrepo                      │
+│   [ ] add-dark-mode.md → myorg/myrepo                      │
+│                                                             │
+│ Modified Files (will update issues):                        │
+│   [x] myorg-myrepo#45-update-readme.md                     │
+│                                                             │
+│ Conflicts (GitHub changed since last sync):                 │
+│   [ ] myorg-myrepo#67-api-refactor.md                      │
+│       Local: 2025-01-15 10:30  GitHub: 2025-01-15 11:00    │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│ [Space] Toggle  [Enter] Push Selected  [r] Refresh  [ESC]  │
+└─────────────────────────────────────────────────────────────┘
+```
 
-- [ ] Create new issues (with repository selection)
-- [ ] Edit issue title and body
-- [ ] External editor integration (fetch → edit → push)
-- [ ] Add/remove labels
-- [ ] Close/reopen issues
+### Keybindings
 
-### Phase 4: Polish
+| Key | Action |
+|-----|--------|
+| `r` | Refresh from GitHub (manual sync) |
+| `S` | Open sync status screen (Phase 2) |
+| `p` | Push current task (if local/modified) (Phase 2) |
 
-- [ ] Column auto-detection from project
-- [ ] Priority label mapping
-- [ ] Type label mapping
-- [ ] Caching for faster startup
-- [ ] Rate limit handling
+### CLI Commands
 
-### Out of Scope for MVP
+```bash
+# Normal operation
+sltasks                    # Launch TUI
 
-- Pull request reviews/merging
-- Draft issues
-- Milestones
-- Iterations/Sprints
-- Custom fields beyond Status
-- Sub-issues
-- Project creation/configuration
-- Multiple projects
-
----
-
-## Implementation Comparison: GitHub vs Jira
-
-### Easier in GitHub
-
-| Aspect | Why Easier |
-|--------|-----------|
-| **Status changes** | Direct field update, no workflow transitions to discover |
-| **Body format** | Already markdown, no conversion needed |
-| **Ordering** | Native `updateProjectV2ItemPosition` mutation |
-| **Authentication** | Can leverage existing `gh` CLI auth |
-| **Local editing** | Issues are markdown, familiar format |
-
-### Harder in GitHub
-
-| Aspect | Why Harder |
-|--------|-----------|
-| **API type** | GraphQL is more complex than REST |
-| **Node IDs** | Must track opaque IDs, not human-readable |
-| **Priority/Type** | No native fields, must use label conventions |
-| **Multi-repo** | Projects span repos, need to track source |
-| **Rate limits** | Cost-based, harder to predict |
-
-### Net Assessment
-
-**GitHub Projects is easier overall** for sltasks integration because:
-
-1. No workflow complexity - any status → any status
-2. Markdown body - no format conversion
-3. Native ordering API
-4. Simpler authentication options
-5. Issues are already a familiar concept to sltasks users
+# Sync operations (Phase 2)
+sltasks sync               # Sync from GitHub to filesystem
+sltasks sync --dry-run     # Show what would sync without making changes
+sltasks push               # Interactive push of local changes
+sltasks push --dry-run     # Show what would be pushed
+```
 
 ---
 
-## Technical Considerations
+## API Analysis
 
-### HTTP/GraphQL Client
+### GraphQL API (Primary)
 
-Options:
-1. **httpx** - HTTP client, send GraphQL as POST
-2. **gql** - Python GraphQL client with query validation
-3. **sgqlc** - Schema-based GraphQL client
+GitHub Projects V2 requires the GraphQL API. Key operations:
 
-**Recommendation:** Use `httpx` for simplicity, consider `gql` if query validation becomes valuable.
+#### Queries
 
-### Sample GraphQL Queries
+| Operation | Query | Notes |
+|-----------|-------|-------|
+| Get project | `node(id: PROJECT_ID)` | By node ID |
+| Get fields | `project.fields(first: 20)` | Includes Status field |
+| Get items | `project.items(first: 100)` | Issues, PRs, drafts |
+| Get project by URL | Parse URL, then `organization.projectV2` or `user.projectV2` | To get node ID |
+
+#### Mutations
+
+| Operation | Mutation | Notes |
+|-----------|----------|-------|
+| Add issue to project | `addProjectV2ItemById` | Returns item ID |
+| Update field value | `updateProjectV2ItemFieldValue` | For Status changes |
+| Reorder item | `updateProjectV2ItemPosition` | Move within column |
+| Create issue | `createIssue` | Issues API, not Projects |
+| Update issue | `updateIssue` | Title, body, labels |
+| Close issue | `updateIssue(state: CLOSED)` | Archive action |
+
+#### Critical Constraint
+
+> "You cannot add and update an item in the same call."
+
+Creating a new task requires: create issue → add to project → update status (3 calls).
+
+### Sample Queries
 
 #### Get Project and Items
+
 ```graphql
 query GetProject($projectId: ID!) {
   node(id: $projectId) {
@@ -544,6 +429,7 @@ query GetProject($projectId: ID!) {
 ```
 
 #### Update Status
+
 ```graphql
 mutation UpdateStatus($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
   updateProjectV2ItemFieldValue(
@@ -559,36 +445,76 @@ mutation UpdateStatus($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: S
 }
 ```
 
-### Error Handling
+### Rate Limits
 
-| Error | Handling |
-|-------|----------|
-| Auth failure (401) | Clear message, check GITHUB_TOKEN |
-| Not found (404) | Project/issue deleted, refresh |
-| Forbidden (403) | Missing permissions, inform user |
-| Rate limited | Backoff, show remaining quota |
-| Query too complex | Simplify query, paginate |
-
-### Caching Strategy
-
-- Cache project metadata (fields, options) on startup
-- Cache items on `get_all()`, invalidate on reload
-- Store node ID mappings persistently in `~/.sltasks/github-cache/`
-- Optional: webhook integration for real-time updates (advanced)
+| Limit Type | Value | Notes |
+|------------|-------|-------|
+| Primary | 5,000 points/hour | Cost-based, not request-based |
+| Per-minute | 2,000 points | Secondary limit |
+| Pagination | 100 items max | Per connection |
 
 ---
 
-## Configuration Validation
+## Challenges and Solutions
 
-### On Startup
+### Challenge 1: GraphQL Complexity
 
-1. Validate `backend: github` with required config
-2. Check for `GITHUB_TOKEN` or `gh auth token`
-3. Parse project URL or owner/project_number
-4. Test API connectivity
-5. Fetch project, verify it exists
-6. Discover Status field and cache options
-7. Build column mapping (explicit or auto)
+**Problem:** GraphQL requires building complex queries with proper field selection.
+
+**Solution:**
+- Use httpx for HTTP, pre-define query templates
+- Consider `gql` library if validation becomes valuable
+
+### Challenge 2: Node IDs
+
+**Problem:** GitHub uses opaque node IDs that aren't human-readable.
+
+**Solution:**
+- Store all IDs in `GitHubProviderData`
+- Display human-readable `owner/repo#123` to users
+- Node IDs only used internally for API calls
+
+### Challenge 3: Multi-Repository Projects
+
+**Problem:** A GitHub Project can contain issues from multiple repositories.
+
+**Solution:**
+- Track `repository` for each issue
+- Display full `owner/repo#123` format
+- For new issues: use `default_repo` from config, allow per-file override
+- Validate repos against `allowed_repos` list
+
+### Challenge 4: Status Field Discovery
+
+**Problem:** Need to find the Status field and its options.
+
+**Solution:**
+- Query project fields on startup
+- Find field where `name == "Status"` (or configured name)
+- Cache field ID and option IDs
+- Map options to sltasks columns via `column_mapping`
+
+### Challenge 5: Offline/Sync Conflicts
+
+**Problem:** Local edits may conflict with GitHub changes.
+
+**Solution:**
+- GitHub wins by default (source of truth)
+- User sets `push_changes: true` to override
+- Sync screen shows conflicts with timestamps
+- `--dry-run` option to preview changes
+
+---
+
+## Error Handling
+
+| Error | Handling |
+|-------|----------|
+| Auth failure (401) | Clear message: check GITHUB_TOKEN or `gh auth login` |
+| Not found (404) | Project/issue deleted, suggest refresh |
+| Forbidden (403) | Missing permissions, list required scopes |
+| Rate limited (429) | Backoff, show remaining quota |
+| Enterprise not reachable | Check `base_url` and network |
 
 ### Error Messages
 
@@ -608,53 +534,17 @@ Error: Project not found
 Error: Status field not found
   The project doesn't have a Status field configured.
   Add a Status field to your GitHub Project board.
+
+Error: Repository not allowed
+  Cannot create issue in 'other/repo' - not in allowed_repos list.
+  Add it to github.allowed_repos in sltasks.yml or use the default repo.
 ```
 
 ---
 
-## Open Questions
+## Technical Implementation
 
-1. **Project URL parsing**
-   - Support both `github.com/orgs/X/projects/N` and `github.com/users/X/projects/N`?
-   - Handle private vs public project URLs?
-
-2. **Multi-repository display**
-   - Show repository name in task title? e.g., `[myrepo] Fix bug`
-   - Or just show issue number and let user inspect?
-
-3. **PR handling**
-   - Include PRs by default or require opt-in?
-   - Show PR-specific info (merge status, checks)?
-
-4. **Draft issues**
-   - Include? They're GitHub-specific and can't be closed.
-   - If included, how to handle "convert to issue"?
-
-5. **Label conventions**
-   - Prescribe specific labels (`priority:high`) or configurable patterns?
-   - Should sltasks create labels if missing?
-
-6. **Closed issues column**
-   - When `include_closed: true`, which column?
-   - Always "done" or preserve last status?
-
----
-
-## Implementation Order Recommendation
-
-1. **GraphQL client setup** - httpx + auth + basic query execution
-2. **Project discovery** - Fetch project by URL/ID, get Status field
-3. **Item fetching** - Query items, map to Task model
-4. **Read-only view** - Display in TUI, navigation works
-5. **Status updates** - Move between columns
-6. **Ordering** - Reorder within column
-7. **Issue editing** - Title, body, labels
-8. **Issue creation** - New issue → add to project
-9. **Polish** - Caching, error handling, config validation
-
----
-
-## Dependencies to Add
+### Dependencies
 
 ```toml
 # pyproject.toml
@@ -662,24 +552,55 @@ Error: Status field not found
 httpx = "^0.27"  # HTTP client for GitHub GraphQL API
 ```
 
-Same dependency as Jira - could share the HTTP client abstraction.
+### Key Components
+
+1. **GitHubClient** - HTTP/GraphQL client with auth and rate limiting
+2. **GitHubProjectsRepository** - Implements `RepositoryProtocol`
+3. **GitHubSyncEngine** - Handles filesystem sync (Phase 2)
+4. **SyncScreen** - TUI screen for reviewing sync status (Phase 2)
+
+### RepositoryProtocol Implementation
+
+| Method | GitHub Implementation |
+|--------|----------------------|
+| `get_all()` | Query project items, map to Tasks |
+| `get_by_id(id)` | Lookup from cached items or query |
+| `save(task)` | Update issue title/body/labels, update Status field |
+| `delete(id)` | Close issue (or remove from project) |
+| `get_board_order()` | Derived from project item positions |
+| `save_board_order()` | `updateProjectV2ItemPosition` mutations |
+| `reload()` | Re-fetch all project data |
+| `validate()` | Test auth, fetch project, discover Status field |
 
 ---
 
-## Comparison Summary
+## Open Questions Resolved
 
-| Dimension | GitHub Projects | Jira | Winner |
-|-----------|-----------------|------|--------|
-| API complexity | GraphQL (moderate) | REST (simple) | Jira |
-| Status changes | Simple field update | Workflow transitions | GitHub |
-| Body format | Markdown native | ADF conversion needed | GitHub |
-| Ordering | Native API | Rank field | GitHub |
-| Authentication | Token or CLI | Token only | GitHub |
-| Rate limits | 5K points/hour | ~100 req/min | Similar |
-| Priority/Type | Label conventions | Native fields | Jira |
-| Multi-source | Multi-repo projects | Single project | Jira |
+| Question | Resolution |
+|----------|------------|
+| Multi-repo display | Show `owner/repo#123` format |
+| PR handling | Include by default (`include_prs: true`) |
+| Draft issues | Exclude by default (`include_drafts: false`) |
+| Closed issues | Exclude by default (`include_closed: false`) |
+| Label conventions | Use existing `type_alias`/`priority_alias` config |
+| Enterprise support | Via `base_url` config (minimal complexity) |
+| Offline mode | Filesystem sync in Phase 2 |
+| LLM integration | Create issues from local files, push via sync screen |
 
-**Overall: GitHub Projects is recommended as the first external integration** due to lower complexity and better alignment with sltasks' markdown-centric design.
+---
+
+## Comparison: GitHub vs Jira
+
+| Aspect | GitHub Projects | Jira |
+|--------|-----------------|------|
+| **API Type** | GraphQL (moderate) | REST (simple) |
+| **Status changes** | Simple field update | Workflow transitions |
+| **Body format** | Markdown native | ADF conversion needed |
+| **Ordering** | Native position API | Rank field |
+| **Authentication** | Token or `gh` CLI | Token only |
+| **Priority/Type** | Label conventions | Native fields |
+
+**Verdict:** GitHub Projects is recommended as the first external integration due to lower complexity and better alignment with sltasks' markdown-centric design.
 
 ---
 
@@ -689,6 +610,3 @@ Same dependency as Jira - could share the HTTP client abstraction.
 - [GitHub GraphQL API Documentation](https://docs.github.com/en/graphql)
 - [GraphQL Objects Reference](https://docs.github.com/en/graphql/reference/objects)
 - [Rate limits for GraphQL API](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api)
-- [GraphQL Pagination](https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api)
-- [REST API for GitHub Projects (2025)](https://github.blog/changelog/2025-09-11-a-rest-api-for-github-projects-sub-issues-improvements-and-more/)
-- [GitHub Projects CLI Examples](https://gist.github.com/ruvnet/ac1ec98a770d57571afe077b21676a1d)

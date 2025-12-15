@@ -1,11 +1,13 @@
 """sltasks TUI Application."""
 
+import logging
+
 from textual.app import App
 from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from .config import Settings
-from .repositories import FilesystemRepository
+from .repositories import FilesystemRepository, GitHubProjectsRepository, RepositoryProtocol
 from .services import (
     BoardService,
     ConfigService,
@@ -21,6 +23,8 @@ from .ui.widgets import (
     TaskPreviewModal,
     TypeSelectorModal,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SltasksApp(App):
@@ -81,19 +85,64 @@ class SltasksApp(App):
 
     def _init_services(self) -> None:
         """Initialize repository and services."""
+        logger.info("Initializing services")
+        logger.debug("Project root: %s", self.settings.project_root.absolute())
+
         self.config_service = ConfigService(self.settings.project_root)
-        # Get task_root from config service (computed from project_root + config.task_root)
-        task_root = self.config_service.task_root
-        self.repository = FilesystemRepository(task_root, self.config_service)
+        config = self.config_service.get_config()
+
+        # Log configuration details
+        logger.info("Provider: %s", config.provider)
+        board_config = config.board
+        logger.debug(
+            "Board config: %d columns, %d types, %d priorities",
+            len(board_config.columns),
+            len(board_config.types),
+            len(board_config.priorities),
+        )
+        logger.debug("Columns: %s", [col.id for col in board_config.columns])
+
+        # Initialize repository based on provider
+        self.repository: RepositoryProtocol
+        if config.provider == "github":
+            logger.info("Using GitHub Projects repository")
+            if config.github:
+                logger.debug("GitHub project URL: %s", config.github.project_url)
+                logger.debug("GitHub default repo: %s", config.github.default_repo)
+            self.repository = GitHubProjectsRepository(self.config_service)
+        else:
+            # Default to filesystem
+            task_root = self.config_service.task_root
+            logger.info("Using filesystem repository: %s", task_root)
+            self.repository = FilesystemRepository(task_root, self.config_service)
+
+        # Validate repository configuration
+        logger.debug("Validating repository configuration")
+        valid, error = self.repository.validate()
+        if not valid:
+            # Store error for display on mount
+            logger.error("Repository validation failed: %s", error)
+            self._init_error = error
+        else:
+            logger.info("Repository validation successful")
+            self._init_error = None
+
         self.template_service = TemplateService(self.config_service)
         self.task_service = TaskService(self.repository, self.config_service, self.template_service)
         self.board_service = BoardService(self.repository, self.config_service)
         self.filter_service = FilterService()
+        logger.info("Services initialized")
 
     def on_mount(self) -> None:
         """Called when app is mounted."""
-        # Ensure tasks directory exists
-        self.repository.ensure_directory()
+        # Check for initialization errors
+        if self._init_error:
+            self.notify(f"Error: {self._init_error}", severity="error", timeout=10)
+
+        # Ensure tasks directory exists (filesystem only)
+        if hasattr(self.repository, "ensure_directory"):
+            self.repository.ensure_directory()
+
         # Push the board screen
         self.push_screen("board")
 

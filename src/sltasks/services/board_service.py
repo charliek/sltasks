@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from ..models import Board, BoardOrder, Task
@@ -12,6 +13,8 @@ from ..utils import now_utc
 
 if TYPE_CHECKING:
     from .config_service import ConfigService
+
+logger = logging.getLogger(__name__)
 
 
 class BoardService:
@@ -50,7 +53,10 @@ class BoardService:
         """
         task = self.repository.get_by_id(task_id)
         if task is None:
+            logger.debug("move_task: task not found: %s", task_id)
             return None
+
+        old_state = task.state
 
         # Resolve alias to canonical ID
         config = self._get_board_config()
@@ -62,6 +68,7 @@ class BoardService:
         # Save updates the file and yaml
         self.repository.save(task)
 
+        logger.info("Task moved: %s (%s -> %s)", task_id, old_state, canonical_state)
         return task
 
     def move_task_left(self, task_id: str) -> Task | None:
@@ -90,16 +97,19 @@ class BoardService:
 
     def archive_task(self, task_id: str) -> Task | None:
         """Move a task to the archived state."""
+        logger.info("Archiving task: %s", task_id)
         return self.move_task(task_id, STATE_ARCHIVED)
 
     def unarchive_task(self, task_id: str) -> Task | None:
         """Move an archived task to the first column."""
         task = self.repository.get_by_id(task_id)
         if task is None or task.state != STATE_ARCHIVED:
+            logger.debug("unarchive_task: task not found or not archived: %s", task_id)
             return None
 
         config = self._get_board_config()
         first_column = config.columns[0].id
+        logger.info("Unarchiving task: %s -> %s", task_id, first_column)
         return self.move_task(task_id, first_column)
 
     def get_board_order(self) -> BoardOrder:
@@ -123,12 +133,14 @@ class BoardService:
         """
         task = self.repository.get_by_id(task_id)
         if task is None:
+            logger.debug("reorder_task: task not found: %s", task_id)
             return False
 
         board_order = self.repository.get_board_order()
         column = board_order.columns.get(task.state, [])
 
         if task_id not in column:
+            logger.debug("reorder_task: task not in column order: %s", task_id)
             return False
 
         current_idx = column.index(task_id)
@@ -136,6 +148,7 @@ class BoardService:
 
         # Check bounds
         if new_idx < 0 or new_idx >= len(column):
+            logger.debug("reorder_task: at boundary, cannot move: %s", task_id)
             return False
 
         # Swap positions
@@ -143,6 +156,10 @@ class BoardService:
 
         # Save updated order
         self.repository.save_board_order(board_order)
+        direction = "up" if delta < 0 else "down"
+        logger.debug(
+            "Task reordered %s: %s (pos %d -> %d)", direction, task_id, current_idx, new_idx
+        )
         return True
 
     def reload(self) -> None:

@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..models import FileProviderData, Task
+from ..models import FileProviderData, GitHubProviderData, Task
 from ..repositories import RepositoryProtocol
 from ..utils import generate_filename, now_utc
 
 if TYPE_CHECKING:
     from .config_service import ConfigService
     from .template_service import TemplateService
+
+logger = logging.getLogger(__name__)
 
 
 class TaskService:
@@ -105,7 +109,9 @@ class TaskService:
             body=body,
         )
 
-        return self.repository.save(task)
+        saved_task = self.repository.save(task)
+        logger.info("Task created: %s (state=%s, type=%s)", saved_task.id, state, resolved_type)
+        return saved_task
 
     def update_task(self, task: Task) -> Task:
         """
@@ -118,6 +124,7 @@ class TaskService:
 
     def delete_task(self, task_id: str) -> None:
         """Delete a task by ID."""
+        logger.info("Deleting task: %s", task_id)
         self.repository.delete(task_id)
 
     def rename_task_to_match_title(
@@ -181,26 +188,133 @@ class TaskService:
 
     def open_in_editor(self, task: Task, task_root: Path | None = None) -> bool:
         """
-        Open task file in the user's editor.
+        Open task in the user's editor.
 
-        This is a filesystem-specific operation. For non-filesystem tasks,
-        returns False.
+        For filesystem tasks, opens the file directly.
+        For GitHub tasks, opens a temp file and pushes changes back.
 
         Args:
             task: The task to edit
             task_root: The task root directory (required for filesystem tasks)
 
-        Returns True if editor exited successfully.
+        Returns True if editor exited successfully and changes were saved.
         """
-        # Only filesystem tasks can be edited locally
-        if not isinstance(task.provider_data, FileProviderData):
+        logger.debug("Opening task in editor: %s", task.id)
+        if isinstance(task.provider_data, GitHubProviderData):
+            return self._open_github_issue_in_editor(task)
+        elif isinstance(task.provider_data, FileProviderData):
+            return self._open_file_in_editor(task, task_root)
+        else:
+            logger.debug("Unknown provider type, cannot open in editor")
             return False
 
+    def _open_file_in_editor(self, task: Task, task_root: Path | None) -> bool:
+        """Open a filesystem task in the editor."""
         if task_root is None:
             return False
 
         filepath = task_root / task.id
+        return self._run_editor(filepath)
 
+    def _open_github_issue_in_editor(self, task: Task) -> bool:
+        """Open a GitHub issue in a temp file, then push changes back.
+
+        Creates a temp markdown file with frontmatter containing the title
+        and body. After editing, parses changes and updates via API.
+        """
+        if not isinstance(task.provider_data, GitHubProviderData):
+            return False
+
+        logger.debug("Opening GitHub issue #%d in editor", task.provider_data.issue_number)
+
+        # Create temp file with task content
+        content = self._format_github_task_for_editing(task)
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".md",
+            delete=False,
+            prefix=f"github-issue-{task.provider_data.issue_number}-",
+        ) as f:
+            f.write(content)
+            temp_path = Path(f.name)
+
+        original_content = content
+
+        try:
+            # Open in editor
+            if not self._run_editor(temp_path):
+                logger.debug("Editor returned non-zero exit code")
+                return False
+
+            # Read back edited content
+            with temp_path.open() as f:
+                edited_content = f.read()
+
+            # Check for changes
+            if edited_content == original_content:
+                logger.debug("No changes detected after editing")
+                return True  # No changes, but editor ran successfully
+
+            # Parse the edited content
+            new_title, new_body = self._parse_github_task_from_editing(edited_content)
+
+            # Update task
+            task.title = new_title
+            task.body = new_body
+            self.repository.save(task)
+
+            logger.info("GitHub issue #%d updated after editing", task.provider_data.issue_number)
+            return True
+
+        finally:
+            # Clean up temp file
+            temp_path.unlink(missing_ok=True)
+
+    def _format_github_task_for_editing(self, task: Task) -> str:
+        """Format a GitHub task for editing in a temp file.
+
+        Uses a simple format with title on first line and body below.
+        """
+        lines = [
+            f"# {task.title or ''}",
+            "",
+            task.body or "",
+        ]
+        return "\n".join(lines)
+
+    def _parse_github_task_from_editing(self, content: str) -> tuple[str, str]:
+        """Parse an edited GitHub task file.
+
+        Returns (title, body).
+        """
+        lines = content.split("\n")
+
+        # Extract title from first line (strip # prefix)
+        title = ""
+        body_start = 0
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("# "):
+                title = stripped[2:].strip()
+                body_start = i + 1
+                break
+            elif stripped:
+                # First non-empty line without # is just body
+                body_start = 0
+                break
+
+        # Skip blank lines after title
+        while body_start < len(lines) and not lines[body_start].strip():
+            body_start += 1
+
+        body = "\n".join(lines[body_start:]).strip()
+
+        return title, body
+
+    def _run_editor(self, filepath: Path) -> bool:
+        """Run the user's editor on a file."""
         # Try $EDITOR, then common fallbacks
         editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
         if not editor:
@@ -213,7 +327,6 @@ class TaskService:
                 return False
 
         # Handle editors with arguments (e.g., "zed --wait", "code --wait")
-        # Use shell=True to properly handle the command string
         import shlex
 
         editor_parts = shlex.split(editor)
