@@ -627,3 +627,455 @@ class TestGitHubReorderTask:
         call_args = mock_client.mutate.call_args
         # Should still call mutation but with afterId=None
         assert call_args[0][1]["afterId"] is None
+
+
+class TestGitHubFetchRepoLabels:
+    """Tests for _fetch_repo_labels method."""
+
+    def test_fetch_repo_labels_returns_label_map(self, repo, mock_client):
+        """_fetch_repo_labels returns dict mapping label name to ID."""
+        mock_client.query.return_value = {
+            "repository": {
+                "labels": {
+                    "nodes": [
+                        {"id": "LA_123", "name": "bug"},
+                        {"id": "LA_456", "name": "feature"},
+                        {"id": "LA_789", "name": "high"},
+                    ]
+                }
+            }
+        }
+
+        result = repo._fetch_repo_labels("testuser/testrepo")
+
+        assert result == {
+            "bug": "LA_123",
+            "feature": "LA_456",
+            "high": "LA_789",
+        }
+
+    def test_fetch_repo_labels_caches_result(self, repo, mock_client):
+        """_fetch_repo_labels caches and reuses results."""
+        mock_client.query.return_value = {
+            "repository": {"labels": {"nodes": [{"id": "LA_123", "name": "bug"}]}}
+        }
+
+        # First call
+        result1 = repo._fetch_repo_labels("testuser/testrepo")
+        # Second call should use cache
+        result2 = repo._fetch_repo_labels("testuser/testrepo")
+
+        assert result1 == result2
+        assert mock_client.query.call_count == 1  # Only called once
+
+    def test_fetch_repo_labels_handles_api_error(self, repo, mock_client):
+        """_fetch_repo_labels returns empty dict on API error."""
+        from sltasks.github import GitHubClientError
+
+        mock_client.query.side_effect = GitHubClientError("API error")
+
+        result = repo._fetch_repo_labels("testuser/testrepo")
+
+        assert result == {}
+
+
+class TestGitHubComputeLabelChanges:
+    """Tests for _compute_label_changes method."""
+
+    def test_compute_type_label_change(self, repo):
+        """Computes correct add/remove when type changes."""
+        old_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            type="bug",
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label="bug",
+                priority_label=None,
+            ),
+        )
+
+        new_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            type="feature",
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label="bug",  # Still has old label tracked
+                priority_label=None,
+            ),
+        )
+
+        labels_to_add, labels_to_remove = repo._compute_label_changes(new_task, old_task)
+
+        assert "feature" in labels_to_add
+        assert "bug" in labels_to_remove
+
+    def test_compute_priority_label_change_when_no_priority_field(self, repo):
+        """Computes priority label changes when not using priority field."""
+        # Ensure no priority_field is configured (default fixture has none)
+        old_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            type=None,
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label=None,
+                priority_label="medium",
+            ),
+        )
+
+        new_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="high",
+            type=None,
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label=None,
+                priority_label="medium",  # Old label still tracked
+            ),
+        )
+
+        labels_to_add, labels_to_remove = repo._compute_label_changes(new_task, old_task)
+
+        assert "high" in labels_to_add
+        assert "medium" in labels_to_remove
+
+    def test_compute_tag_additions(self, repo):
+        """Computes new tags to add."""
+        old_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            tags=["backend"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        new_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            tags=["backend", "urgent", "api"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        labels_to_add, _labels_to_remove = repo._compute_label_changes(new_task, old_task)
+
+        assert "urgent" in labels_to_add
+        assert "api" in labels_to_add
+        assert "backend" not in labels_to_add
+
+    def test_compute_tag_removals(self, repo):
+        """Computes tags to remove."""
+        old_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            tags=["backend", "urgent", "api"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        new_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            tags=["backend"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        _labels_to_add, labels_to_remove = repo._compute_label_changes(new_task, old_task)
+
+        assert "urgent" in labels_to_remove
+        assert "api" in labels_to_remove
+        assert "backend" not in labels_to_remove
+
+    def test_compute_no_changes(self, repo):
+        """Returns empty lists when no label changes."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            type="bug",
+            tags=["backend"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label="bug",
+                priority_label="medium",  # Must match current priority
+            ),
+        )
+
+        labels_to_add, labels_to_remove = repo._compute_label_changes(task, task)
+
+        assert labels_to_add == []
+        assert labels_to_remove == []
+
+
+class TestGitHubUpdateLabels:
+    """Tests for _update_labels method."""
+
+    def test_update_labels_adds_labels(self, repo, mock_client):
+        """_update_labels calls ADD_LABELS mutation."""
+        repo._repo_labels = {"testuser/testrepo": {"urgent": "LA_urgent", "api": "LA_api"}}
+
+        repo._update_labels(
+            issue_node_id="I_123",
+            repository="testuser/testrepo",
+            labels_to_add=["urgent", "api"],
+            labels_to_remove=[],
+        )
+
+        # Check ADD_LABELS was called
+        add_call = None
+        for call in mock_client.mutate.call_args_list:
+            if "addLabelsToLabelable" in call[0][0]:
+                add_call = call
+                break
+
+        assert add_call is not None
+        assert set(add_call[0][1]["labelIds"]) == {"LA_urgent", "LA_api"}
+
+    def test_update_labels_removes_labels(self, repo, mock_client):
+        """_update_labels calls REMOVE_LABELS mutation."""
+        repo._repo_labels = {"testuser/testrepo": {"old_label": "LA_old"}}
+
+        repo._update_labels(
+            issue_node_id="I_123",
+            repository="testuser/testrepo",
+            labels_to_add=[],
+            labels_to_remove=["old_label"],
+        )
+
+        # Check REMOVE_LABELS was called
+        remove_call = None
+        for call in mock_client.mutate.call_args_list:
+            if "removeLabelsFromLabelable" in call[0][0]:
+                remove_call = call
+                break
+
+        assert remove_call is not None
+        assert remove_call[0][1]["labelIds"] == ["LA_old"]
+
+    def test_update_labels_skips_unknown_labels(self, repo, mock_client):
+        """_update_labels skips labels not found in repo."""
+        repo._repo_labels = {"testuser/testrepo": {"known": "LA_known"}}
+
+        repo._update_labels(
+            issue_node_id="I_123",
+            repository="testuser/testrepo",
+            labels_to_add=["known", "unknown"],
+            labels_to_remove=[],
+        )
+
+        # Should only add the known label
+        add_call = mock_client.mutate.call_args
+        assert add_call[0][1]["labelIds"] == ["LA_known"]
+
+    def test_update_labels_no_op_when_empty(self, repo, mock_client):
+        """_update_labels does nothing when no changes."""
+        repo._update_labels(
+            issue_node_id="I_123",
+            repository="testuser/testrepo",
+            labels_to_add=[],
+            labels_to_remove=[],
+        )
+
+        mock_client.mutate.assert_not_called()
+
+
+class TestGitHubUpdatePriorityField:
+    """Tests for _update_priority_field method."""
+
+    def test_update_priority_field_when_configured(self, mock_config_service, mock_client):
+        """_update_priority_field updates field when priority_field is set."""
+        # Configure priority field
+        github_config = mock_config_service.get_config.return_value.github
+        github_config.priority_field = "Priority"
+
+        repo = GitHubProjectsRepository(mock_config_service)
+        repo._client = mock_client
+        repo._project_id = "PVT_123"
+        repo._priority_field_id = "PVTSSF_priority"
+        repo._priority_options = {
+            "Low": "opt_low",
+            "Medium": "opt_medium",
+            "High": "opt_high",
+        }
+        repo._priority_options_ordered = ["Low", "Medium", "High"]
+
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="high",  # Index 2 in board config priorities
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        repo._update_priority_field(task)
+
+        mock_client.mutate.assert_called_once()
+        call_args = mock_client.mutate.call_args
+        assert call_args[0][1]["fieldId"] == "PVTSSF_priority"
+        assert call_args[0][1]["optionId"] == "opt_high"
+
+    def test_update_priority_field_no_op_when_not_configured(self, repo, mock_client):
+        """_update_priority_field does nothing when priority_field not set."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="high",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        repo._update_priority_field(task)
+
+        mock_client.mutate.assert_not_called()
+
+
+class TestGitHubUpdateIssueWithLabels:
+    """Tests for _update_issue with label support."""
+
+    def test_update_issue_updates_labels(self, repo, mock_client):
+        """_update_issue calls label update methods."""
+        repo._project_id = "PVT_123"
+        repo._status_field_id = "PVTSSF_123"
+        repo._status_options = {"To Do": "opt_todo"}
+        repo._repo_labels = {
+            "testuser/testrepo": {
+                "bug": "LA_bug",
+                "feature": "LA_feature",
+            }
+        }
+
+        # Old task in cache with type=bug
+        old_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            type="bug",
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label="bug",
+            ),
+        )
+        repo._tasks = {"testuser/testrepo#1": old_task}
+
+        # New task with type=feature
+        new_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            type="feature",
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label="bug",
+            ),
+        )
+
+        repo._update_issue(new_task)
+
+        # Should have called mutations for labels
+        mutation_calls = [call[0][0] for call in mock_client.mutate.call_args_list]
+
+        # Should have called UPDATE_ISSUE and label mutations
+        assert any("updateIssue" in call for call in mutation_calls)
+
+    def test_update_issue_updates_provider_data_labels(self, repo):
+        """_update_issue updates provider_data with new label tracking."""
+        repo._project_id = "PVT_123"
+        repo._status_field_id = "PVTSSF_123"
+        repo._status_options = {"To Do": "opt_todo"}
+        repo._repo_labels = {"testuser/testrepo": {"feature": "LA_feature"}}
+
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            type="feature",
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+                type_label=None,  # Was not set before
+            ),
+        )
+
+        result = repo._update_issue(task)
+
+        # Provider data should now track the type label
+        assert result.provider_data.type_label == "feature"

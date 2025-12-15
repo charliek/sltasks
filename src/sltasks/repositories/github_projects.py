@@ -9,12 +9,15 @@ from typing import TYPE_CHECKING, Any
 from ..github import GitHubClient, GitHubClientError
 from ..github.queries import (
     ADD_ITEM_TO_PROJECT,
+    ADD_LABELS,
     CLOSE_ISSUE,
     CREATE_ISSUE,
     GET_ORG_PROJECT,
     GET_PROJECT_ITEMS,
     GET_REPOSITORY,
+    GET_REPOSITORY_LABELS,
     GET_USER_PROJECT,
+    REMOVE_LABELS,
     UPDATE_ISSUE,
     UPDATE_ITEM_FIELD,
     UPDATE_ITEM_POSITION,
@@ -67,6 +70,9 @@ class GitHubProjectsRepository:
 
         # Auto-generated columns (when board.columns matches Status field)
         self._generated_columns: list[ColumnConfig] | None = None
+
+        # Repository labels cache (repo -> {label_name: label_id})
+        self._repo_labels: dict[str, dict[str, str]] = {}
 
     # --- Configuration Helpers ---
 
@@ -803,6 +809,211 @@ class GitHubProjectsRepository:
         logger.info("Created GitHub issue: %s", task_id)
         return task
 
+    def _fetch_repo_labels(self, repository: str) -> dict[str, str]:
+        """Fetch labels for a repository, caching the result.
+
+        Args:
+            repository: Repository in "owner/repo" format
+
+        Returns:
+            Dict mapping label name to label node ID
+        """
+        if repository in self._repo_labels:
+            return self._repo_labels[repository]
+
+        client = self._ensure_client()
+        owner, name = repository.split("/")
+
+        try:
+            result = client.query(GET_REPOSITORY_LABELS, {"owner": owner, "name": name})
+            labels_data = result.get("repository", {}).get("labels", {}).get("nodes", [])
+            label_map = {label["name"]: label["id"] for label in labels_data}
+            self._repo_labels[repository] = label_map
+            logger.debug("Fetched %d labels from %s", len(label_map), repository)
+            return label_map
+        except GitHubClientError as e:
+            logger.warning("Failed to fetch labels from %s: %s", repository, e)
+            return {}
+
+    def _compute_label_changes(
+        self,
+        task: Task,
+        old_task: Task | None,
+    ) -> tuple[list[str], list[str]]:
+        """Compute labels to add and remove based on task changes.
+
+        Args:
+            task: The updated task
+            old_task: The task before updates (for comparing tags)
+
+        Returns:
+            Tuple of (labels_to_add, labels_to_remove)
+        """
+        if not isinstance(task.provider_data, GitHubProviderData):
+            return [], []
+
+        board_config = self._get_board_config()
+        github_config = self._get_github_config()
+        provider = task.provider_data
+
+        labels_to_add: list[str] = []
+        labels_to_remove: list[str] = []
+
+        # Track old labels
+        old_type_label = provider.type_label
+        old_priority_label = provider.priority_label
+
+        # Handle type label changes
+        new_type_label: str | None = None
+        if task.type:
+            type_config = board_config.get_type(task.type)
+            if type_config:
+                new_type_label = type_config.write_alias
+                if new_type_label != old_type_label:
+                    if old_type_label:
+                        labels_to_remove.append(old_type_label)
+                    labels_to_add.append(new_type_label)
+        elif old_type_label:
+            # Type was cleared
+            labels_to_remove.append(old_type_label)
+
+        # Handle priority label changes (only if NOT using priority field)
+        new_priority_label: str | None = None
+        if not github_config.priority_field:
+            priority_config = board_config.get_priority(task.priority)
+            if priority_config:
+                new_priority_label = priority_config.write_alias
+                if new_priority_label != old_priority_label:
+                    if old_priority_label:
+                        labels_to_remove.append(old_priority_label)
+                    labels_to_add.append(new_priority_label)
+
+        # Handle general tag changes
+        if old_task:
+            old_tags = set(old_task.tags)
+            new_tags = set(task.tags)
+
+            # Add new tags (excluding type/priority labels we're already handling)
+            for tag in new_tags - old_tags:
+                if tag not in labels_to_add and tag != new_type_label and tag != new_priority_label:
+                    labels_to_add.append(tag)
+
+            # Remove old tags (but not if they're type/priority labels)
+            for tag in old_tags - new_tags:
+                if (
+                    tag not in labels_to_remove
+                    and tag != old_type_label
+                    and tag != old_priority_label
+                ):
+                    labels_to_remove.append(tag)
+
+        return labels_to_add, labels_to_remove
+
+    def _update_labels(
+        self,
+        issue_node_id: str,
+        repository: str,
+        labels_to_add: list[str],
+        labels_to_remove: list[str],
+    ) -> None:
+        """Update labels on an issue.
+
+        Args:
+            issue_node_id: The issue's GraphQL node ID
+            repository: The repository (owner/repo format)
+            labels_to_add: Label names to add
+            labels_to_remove: Label names to remove
+        """
+        if not labels_to_add and not labels_to_remove:
+            return
+
+        client = self._ensure_client()
+        repo_labels = self._fetch_repo_labels(repository)
+
+        # Remove labels first
+        if labels_to_remove:
+            remove_ids = [repo_labels[name] for name in labels_to_remove if name in repo_labels]
+            if remove_ids:
+                try:
+                    client.mutate(
+                        REMOVE_LABELS,
+                        {"labelableId": issue_node_id, "labelIds": remove_ids},
+                    )
+                    logger.debug("Removed labels: %s", labels_to_remove)
+                except GitHubClientError as e:
+                    logger.warning("Failed to remove labels: %s", e)
+
+        # Add labels
+        if labels_to_add:
+            add_ids = [repo_labels[name] for name in labels_to_add if name in repo_labels]
+            if add_ids:
+                try:
+                    client.mutate(
+                        ADD_LABELS,
+                        {"labelableId": issue_node_id, "labelIds": add_ids},
+                    )
+                    logger.debug("Added labels: %s", labels_to_add)
+                except GitHubClientError as e:
+                    logger.warning("Failed to add labels: %s", e)
+
+            # Warn about missing labels
+            missing = [name for name in labels_to_add if name not in repo_labels]
+            if missing:
+                logger.warning(
+                    "Labels not found in repository %s (will not be created): %s",
+                    repository,
+                    missing,
+                )
+
+    def _update_priority_field(self, task: Task) -> None:
+        """Update the priority field for a task if priority_field is configured.
+
+        Maps task.priority to the corresponding field option by position.
+        """
+        github_config = self._get_github_config()
+        if not github_config.priority_field or not self._priority_field_id:
+            return
+
+        if not isinstance(task.provider_data, GitHubProviderData):
+            return
+
+        board_config = self._get_board_config()
+
+        # Find the priority index
+        try:
+            priority_index = board_config.priority_ids.index(task.priority)
+        except ValueError:
+            logger.warning("Unknown priority '%s', not updating field", task.priority)
+            return
+
+        # Map to GitHub field option
+        if priority_index >= len(self._priority_options_ordered):
+            logger.warning(
+                "Priority index %d exceeds available options (%d), not updating field",
+                priority_index,
+                len(self._priority_options_ordered),
+            )
+            return
+
+        option_name = self._priority_options_ordered[priority_index]
+        option_id = self._priority_options.get(option_name)
+
+        if option_id:
+            client = self._ensure_client()
+            try:
+                client.mutate(
+                    UPDATE_ITEM_FIELD,
+                    {
+                        "projectId": self._project_id,
+                        "itemId": task.provider_data.project_item_id,
+                        "fieldId": self._priority_field_id,
+                        "optionId": option_id,
+                    },
+                )
+                logger.debug("Updated priority field to: %s", option_name)
+            except GitHubClientError as e:
+                logger.warning("Failed to update priority field: %s", e)
+
     def _update_issue(self, task: Task) -> Task:
         """Update an existing GitHub issue."""
         if not isinstance(task.provider_data, GitHubProviderData):
@@ -812,6 +1023,9 @@ class GitHubProjectsRepository:
 
         client = self._ensure_client()
         provider = task.provider_data
+
+        # Get the old task state for comparing changes
+        old_task = self._tasks.get(task.id)
 
         # Update issue title and body
         client.mutate(
@@ -851,6 +1065,31 @@ class GitHubProjectsRepository:
                         "optionId": option_id,
                     },
                 )
+
+        # Update priority field (if configured)
+        self._update_priority_field(task)
+
+        # Compute and apply label changes (type, priority labels, tags)
+        labels_to_add, labels_to_remove = self._compute_label_changes(task, old_task)
+        self._update_labels(
+            provider.issue_node_id,
+            provider.repository,
+            labels_to_add,
+            labels_to_remove,
+        )
+
+        # Update provider_data with new label tracking
+        board_config = self._get_board_config()
+        if task.type:
+            type_config = board_config.get_type(task.type)
+            provider.type_label = type_config.write_alias if type_config else None
+        else:
+            provider.type_label = None
+
+        github_config = self._get_github_config()
+        if not github_config.priority_field:
+            priority_config = board_config.get_priority(task.priority)
+            provider.priority_label = priority_config.write_alias if priority_config else None
 
         # Update cache
         self._tasks[task.id] = task

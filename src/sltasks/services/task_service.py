@@ -9,11 +9,15 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import frontmatter
+
 from ..models import FileProviderData, GitHubProviderData, Task
 from ..repositories import RepositoryProtocol
 from ..utils import generate_filename, now_utc
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from .config_service import ConfigService
     from .template_service import TemplateService
 
@@ -257,11 +261,27 @@ class TaskService:
                 return True  # No changes, but editor ran successfully
 
             # Parse the edited content
-            new_title, new_body = self._parse_github_task_from_editing(edited_content)
+            parsed = self._parse_github_task_from_editing(edited_content)
 
-            # Update task
-            task.title = new_title
-            task.body = new_body
+            # Resolve aliases to canonical IDs using board config
+            if self._config_service:
+                board_config = self._config_service.get_board_config()
+                if "priority" in parsed:
+                    parsed["priority"] = board_config.resolve_priority(parsed["priority"])
+                if parsed.get("type"):
+                    parsed["type"] = board_config.resolve_type(parsed["type"])
+
+            # Apply changes to task
+            task.title = parsed.get("title", task.title)
+            task.body = parsed.get("body", task.body)
+            if "priority" in parsed:
+                task.priority = parsed["priority"]
+            if "type" in parsed:
+                task.type = parsed["type"]
+            if "tags" in parsed:
+                task.tags = parsed["tags"]
+
+            # Save will handle all mutations via repository
             self.repository.save(task)
 
             logger.info("GitHub issue #%d updated after editing", task.provider_data.issue_number)
@@ -272,46 +292,111 @@ class TaskService:
             temp_path.unlink(missing_ok=True)
 
     def _format_github_task_for_editing(self, task: Task) -> str:
-        """Format a GitHub task for editing in a temp file.
+        """Format a GitHub task for editing with YAML frontmatter.
 
-        Uses a simple format with title on first line and body below.
+        Includes:
+        - Editable fields: title, priority, type, tags (with valid options comments)
+        - Read-only fields (commented): state, issue reference, created, updated
+        - Body after frontmatter
         """
-        lines = [
-            f"# {task.title or ''}",
-            "",
-            task.body or "",
+        # Calculate column width for right-aligned comments
+        # Find the longest value line to align comments
+        priority_line = f"priority: {task.priority}"
+        type_line = f"type: {task.type or ''}"
+        tags_line = "tags:"
+
+        # Get comments for each field
+        priority_comment = self._get_valid_options_comment("priority")
+        type_comment = self._get_valid_options_comment("type")
+        tags_comment = self._get_valid_options_comment("tags")
+
+        # Calculate padding to align comments (find max line length)
+        lines_with_comments = [
+            (priority_line, priority_comment),
+            (type_line, type_comment),
+            (tags_line, tags_comment),
         ]
+        max_line_len = max(len(line) for line, comment in lines_with_comments if comment)
+        # Add some padding for readability
+        comment_col = max(max_line_len + 2, 25)
+
+        def pad_comment(line: str, comment: str) -> str:
+            """Pad a line so the comment aligns to comment_col."""
+            if not comment:
+                return line
+            padding = " " * max(1, comment_col - len(line))
+            return f"{line}{padding}{comment}"
+
+        lines = ["---"]
+
+        # Title (no comment needed)
+        lines.append(f"title: {task.title or ''}")
+
+        # Priority with aligned comment
+        lines.append(pad_comment(priority_line, priority_comment))
+
+        # Type with aligned comment
+        lines.append(pad_comment(type_line, type_comment))
+
+        # Tags with aligned comment
+        if task.tags:
+            lines.append(pad_comment(tags_line, tags_comment))
+            for tag in task.tags:
+                lines.append(f"  - {tag}")
+        else:
+            lines.append(pad_comment("tags: []", tags_comment))
+
+        # Empty line before read-only section
+        lines.append("")
+
+        # Read-only fields as comments
+        lines.append("# Read-only fields (changes will be ignored):")
+        lines.append(f"# state: {task.state}")
+
+        if isinstance(task.provider_data, GitHubProviderData):
+            issue_ref = f"{task.provider_data.repository}#{task.provider_data.issue_number}"
+            lines.append(f"# issue: {issue_ref}")
+
+        if task.created:
+            lines.append(f"# created: '{task.created.isoformat()}'")
+
+        if task.updated:
+            lines.append(f"# updated: '{task.updated.isoformat()}'")
+
+        lines.append("---")
+        lines.append("")
+        lines.append(task.body or "")
+
         return "\n".join(lines)
 
-    def _parse_github_task_from_editing(self, content: str) -> tuple[str, str]:
-        """Parse an edited GitHub task file.
+    def _parse_github_task_from_editing(self, content: str) -> dict[str, Any]:
+        """Parse an edited GitHub task file with frontmatter.
 
-        Returns (title, body).
+        Returns dict with:
+        - title: str
+        - body: str
+        - priority: str (if present)
+        - type: str | None (if present)
+        - tags: list[str] (if present)
+
+        Read-only fields (state, issue, created, updated) are ignored.
         """
-        lines = content.split("\n")
+        post = frontmatter.loads(content)
 
-        # Extract title from first line (strip # prefix)
-        title = ""
-        body_start = 0
+        result: dict[str, Any] = {
+            "title": post.get("title", ""),
+            "body": post.content,
+        }
 
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("# "):
-                title = stripped[2:].strip()
-                body_start = i + 1
-                break
-            elif stripped:
-                # First non-empty line without # is just body
-                body_start = 0
-                break
+        # Extract editable fields if present
+        if "priority" in post.metadata:
+            result["priority"] = post.metadata["priority"]
+        if "type" in post.metadata:
+            result["type"] = post.metadata["type"] or None
+        if "tags" in post.metadata:
+            result["tags"] = post.metadata["tags"] or []
 
-        # Skip blank lines after title
-        while body_start < len(lines) and not lines[body_start].strip():
-            body_start += 1
-
-        body = "\n".join(lines[body_start:]).strip()
-
-        return title, body
+        return result
 
     def _run_editor(self, filepath: Path) -> bool:
         """Run the user's editor on a file."""
@@ -359,3 +444,42 @@ class TaskService:
             counter += 1
 
         return candidate
+
+    def _get_valid_options_comment(self, field: str, pad_to: int = 0) -> str:
+        """Generate a comment showing valid options for a constrained field.
+
+        Args:
+            field: The field name ("priority", "type", "tags", "state")
+            pad_to: Pad the comment with spaces to align to this column
+
+        Returns:
+            Comment string like "  # Valid: low, medium, high" or empty string
+        """
+        if not self._config_service:
+            return ""
+
+        board_config = self._config_service.get_board_config()
+        config = self._config_service.get_config()
+
+        options: list[str] = []
+        prefix = "Valid"
+
+        if field == "state":
+            options = [col.id for col in board_config.columns]
+        elif field == "priority":
+            options = [p.id for p in board_config.priorities]
+        elif field == "type":
+            options = [t.id for t in board_config.types]
+        elif field == "tags":
+            # Use featured_labels from GitHub config
+            prefix = "Options"
+            if config.github and config.github.featured_labels:
+                options = config.github.featured_labels
+
+        if not options:
+            return ""
+
+        comment = f"# {prefix}: {', '.join(options)}"
+        if pad_to > 0:
+            return f"  {comment}"
+        return f"  {comment}"
