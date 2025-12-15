@@ -129,6 +129,18 @@ class FilesystemRepository:
         self._board_order = order
         self._save_board_order()
 
+    def reorder_task(
+        self,
+        task_id: str,  # noqa: ARG002
+        after_task_id: str | None,  # noqa: ARG002
+    ) -> bool:
+        """Reorder a task to appear after another task.
+
+        For filesystem, ordering is already persisted via save_board_order(),
+        so this is a no-op that returns True (args unused, names must match protocol).
+        """
+        return True
+
     def rename_in_board_order(self, old_task_id: str, new_task_id: str) -> None:
         """Rename a task in the board order."""
         self._ensure_board_order()

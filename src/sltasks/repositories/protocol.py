@@ -76,6 +76,23 @@ class RepositoryProtocol(Protocol):
         """
         ...
 
+    def reorder_task(self, task_id: str, after_task_id: str | None) -> bool:
+        """Reorder a task to appear after another task.
+
+        This persists the position change to the backend. For filesystem
+        repositories, ordering is already persisted via save_board_order().
+        For remote backends (GitHub, Jira), this makes the API call to
+        update the item's position.
+
+        Args:
+            task_id: The task to move
+            after_task_id: The task it should appear after (None for first position)
+
+        Returns:
+            True if reordering was persisted to backend
+        """
+        ...
+
     def reload(self) -> None:
         """Clear caches and reload from source.
 

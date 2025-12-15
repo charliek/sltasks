@@ -17,6 +17,7 @@ from ..github.queries import (
     GET_USER_PROJECT,
     UPDATE_ISSUE,
     UPDATE_ITEM_FIELD,
+    UPDATE_ITEM_POSITION,
 )
 from ..models import BoardOrder, GitHubProviderData, Task
 from ..models.sltasks_config import BoardConfig, ColumnConfig, GitHubConfig
@@ -161,7 +162,53 @@ class GitHubProjectsRepository:
         """
         self._board_order = order
         # Note: Individual task moves are handled in save() by updating
-        # the Status field. Full board reorder would require position mutations.
+        # the Status field. Position reordering uses reorder_task().
+
+    def reorder_task(self, task_id: str, after_task_id: str | None) -> bool:
+        """Reorder a task to appear after another task in GitHub Projects.
+
+        Args:
+            task_id: The task to move
+            after_task_id: The task it should appear after (None for first position)
+
+        Returns:
+            True if reordering was persisted to GitHub
+        """
+        task = self.get_by_id(task_id)
+        if task is None or not isinstance(task.provider_data, GitHubProviderData):
+            logger.warning("reorder_task: task not found or invalid provider: %s", task_id)
+            return False
+
+        after_item_id = None
+        if after_task_id:
+            after_task = self.get_by_id(after_task_id)
+            if after_task and isinstance(after_task.provider_data, GitHubProviderData):
+                after_item_id = after_task.provider_data.project_item_id
+            else:
+                logger.warning("reorder_task: after_task not found: %s", after_task_id)
+
+        client = self._ensure_client()
+        self._fetch_project_metadata()
+
+        logger.debug(
+            "Reordering task %s after %s (item_id=%s, after_id=%s)",
+            task_id,
+            after_task_id,
+            task.provider_data.project_item_id,
+            after_item_id,
+        )
+
+        client.mutate(
+            UPDATE_ITEM_POSITION,
+            {
+                "projectId": self._project_id,
+                "itemId": task.provider_data.project_item_id,
+                "afterId": after_item_id,
+            },
+        )
+
+        logger.info("Reordered task %s in GitHub project", task_id)
+        return True
 
     def reload(self) -> None:
         """Clear caches and reload from GitHub."""

@@ -154,8 +154,13 @@ class BoardService:
         # Swap positions
         column[current_idx], column[new_idx] = column[new_idx], column[current_idx]
 
-        # Save updated order
+        # Save updated order (local)
         self.repository.save_board_order(board_order)
+
+        # Persist position to backend (e.g., GitHub API call)
+        after_task_id = column[new_idx - 1] if new_idx > 0 else None
+        self.repository.reorder_task(task_id, after_task_id)
+
         direction = "up" if delta < 0 else "down"
         logger.debug(
             "Task reordered %s: %s (pos %d -> %d)", direction, task_id, current_idx, new_idx

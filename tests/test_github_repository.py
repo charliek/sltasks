@@ -516,3 +516,114 @@ class TestGitHubProjectsRepositoryBoardOrder:
 
         assert repo._tasks == {}
         assert repo._board_order is None
+
+
+class TestGitHubReorderTask:
+    """Tests for GitHub Projects task reordering."""
+
+    def test_reorder_task_calls_position_mutation(self, repo, mock_client):
+        """Verify reorder_task calls UPDATE_ITEM_POSITION mutation."""
+        task1 = Task(
+            id="testuser/testrepo#1",
+            title="Task 1",
+            state="to_do",
+            priority="medium",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_item1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+        task2 = Task(
+            id="testuser/testrepo#2",
+            title="Task 2",
+            state="to_do",
+            priority="medium",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_item2",
+                issue_node_id="I_456",
+                repository="testuser/testrepo",
+                issue_number=2,
+            ),
+        )
+        repo._tasks = {
+            "testuser/testrepo#1": task1,
+            "testuser/testrepo#2": task2,
+        }
+        repo._project_id = "PVT_project"
+        repo._project_metadata_fetched = True
+
+        result = repo.reorder_task("testuser/testrepo#1", "testuser/testrepo#2")
+
+        assert result is True
+        mock_client.mutate.assert_called_once()
+        call_args = mock_client.mutate.call_args
+        assert call_args[0][1]["projectId"] == "PVT_project"
+        assert call_args[0][1]["itemId"] == "PVTI_item1"
+        assert call_args[0][1]["afterId"] == "PVTI_item2"
+
+    def test_reorder_task_to_first_position(self, repo, mock_client):
+        """Verify afterId is None when moving to first position."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Task 1",
+            state="to_do",
+            priority="medium",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_item1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+        repo._tasks = {"testuser/testrepo#1": task}
+        repo._project_id = "PVT_project"
+        repo._project_metadata_fetched = True
+
+        result = repo.reorder_task("testuser/testrepo#1", None)
+
+        assert result is True
+        call_args = mock_client.mutate.call_args
+        assert call_args[0][1]["afterId"] is None
+
+    def test_reorder_task_with_invalid_task_returns_false(self, repo):
+        """Verify returns False if task not found."""
+        # Add a dummy task so _tasks is truthy (prevents get_all() call)
+        dummy_task = Task(
+            id="dummy",
+            title="Dummy",
+            state="to_do",
+            priority="medium",
+        )
+        repo._tasks = {"dummy": dummy_task}
+
+        result = repo.reorder_task("nonexistent", None)
+
+        assert result is False
+
+    def test_reorder_task_with_invalid_after_task(self, repo, mock_client):
+        """Verify handles missing after_task gracefully (uses None)."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Task 1",
+            state="to_do",
+            priority="medium",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_item1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+        repo._tasks = {"testuser/testrepo#1": task}
+        repo._project_id = "PVT_project"
+        repo._project_metadata_fetched = True
+
+        # after_task_id doesn't exist
+        result = repo.reorder_task("testuser/testrepo#1", "nonexistent")
+
+        assert result is True
+        call_args = mock_client.mutate.call_args
+        # Should still call mutation but with afterId=None
+        assert call_args[0][1]["afterId"] is None
