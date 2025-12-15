@@ -157,7 +157,7 @@ Create `sltasks.yml` in your project root to customize columns and task types:
 
 ```yaml
 version: 1
-provider: file       # Storage backend (file is default; github, jira planned)
+provider: file       # Storage backend: file (default), github (supported), jira (planned)
 task_root: .tasks
 board:
   columns:
@@ -231,11 +231,24 @@ Press `Escape` to clear the filter.
 sltasks [OPTIONS]
 
 Options:
-  --task-root PATH  Path to project root containing sltasks.yml
-  --generate        Generate default sltasks.yml config and exit
-  --version         Show version
-  --help            Show help
+  --task-root PATH       Path to project root containing sltasks.yml
+  --generate             Generate default sltasks.yml config and exit
+  --github-setup [URL]   Interactive GitHub Projects setup
+  -v, --verbose          Increase logging verbosity (-v INFO, -vv DEBUG)
+  --log-file PATH        Write logs to file
+  --version              Show version
+  --help                 Show help
 ```
+
+### GitHub Projects Integration
+
+To use GitHub Projects as your task backend:
+
+```bash
+sltasks --github-setup https://github.com/users/USERNAME/projects/1
+```
+
+This interactively configures sltasks to sync with your GitHub project.
 
 ## License
 

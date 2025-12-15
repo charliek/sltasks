@@ -56,6 +56,16 @@ uv run sltasks
 
 You'll see a kanban board with your configured columns.
 
+## GitHub Projects Integration
+
+Want to use GitHub Projects instead of local files? Run the interactive setup:
+
+```bash
+uv run sltasks --github-setup https://github.com/users/USERNAME/projects/1
+```
+
+This auto-detects your project's columns and generates the configuration. See [GitHub Provider](../user-guide/configuration.md#github-provider) for details.
+
 ## Next steps
 
 See the [Navigation](../user-guide/navigation.md) guide to learn how to navigate, create, and manage tasks.

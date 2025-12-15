@@ -7,6 +7,7 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from .config import Settings
+from .github import GitHubClientError
 from .repositories import FilesystemRepository, GitHubProjectsRepository, RepositoryProtocol
 from .services import (
     BoardService,
@@ -259,11 +260,17 @@ class SltasksApp(App):
         # Suspend TUI and open editor
         task_root = self.config_service.task_root
         with self.suspend():
-            self.task_service.open_in_editor(task, task_root)
+            success = self.task_service.open_in_editor(task, task_root)
 
         # Reload and refresh
-        self.board_service.reload()
-        screen.refresh_board()
+        try:
+            self.board_service.reload()
+            screen.refresh_board()
+            if success:
+                self.notify("Task updated", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to save task: %s", e)
+            self.notify(f"Failed to save: {e}", severity="error", timeout=5)
 
     def action_preview_task(self) -> None:
         """Show task preview modal."""
@@ -297,11 +304,17 @@ class SltasksApp(App):
         # Open in external editor
         task_root = self.config_service.task_root
         with self.suspend():
-            self.task_service.open_in_editor(task, task_root)
+            success = self.task_service.open_in_editor(task, task_root)
 
         # Reload and refresh
-        self.board_service.reload()
-        screen.refresh_board()
+        try:
+            self.board_service.reload()
+            screen.refresh_board()
+            if success:
+                self.notify("Task updated", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to save task: %s", e)
+            self.notify(f"Failed to save: {e}", severity="error", timeout=5)
 
     def action_move_task_left(self) -> None:
         """Move current task to previous column."""
@@ -314,10 +327,19 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        result = self.board_service.move_task_left(task_id)
-        if result and result.state != task.state:
-            screen.refresh_board(focus_task_id=task_id)
-            self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+        original_state = task.state  # Capture before modification (same object in cache)
+        try:
+            result = self.board_service.move_task_left(task_id)
+            if result is None:
+                self.notify("Cannot move task", severity="warning", timeout=2)
+            elif result.state != original_state:
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+            else:
+                self.notify("Already at first column", severity="information", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to move task left: %s", e)
+            self.notify(f"Failed to move: {e}", severity="error", timeout=5)
 
     def action_move_task_right(self) -> None:
         """Move current task to next column."""
@@ -330,10 +352,19 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        result = self.board_service.move_task_right(task_id)
-        if result and result.state != task.state:
-            screen.refresh_board(focus_task_id=task_id)
-            self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+        original_state = task.state  # Capture before modification (same object in cache)
+        try:
+            result = self.board_service.move_task_right(task_id)
+            if result is None:
+                self.notify("Cannot move task", severity="warning", timeout=2)
+            elif result.state != original_state:
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+            else:
+                self.notify("Already at last column", severity="information", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to move task right: %s", e)
+            self.notify(f"Failed to move: {e}", severity="error", timeout=5)
 
     def action_move_task_up(self) -> None:
         """Move current task up in column."""
@@ -346,8 +377,15 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        if self.board_service.reorder_task(task_id, -1):
-            screen.refresh_board(focus_task_id=task_id)
+        try:
+            if self.board_service.reorder_task(task_id, -1):
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify("Moved up", timeout=1)
+            else:
+                self.notify("Already at top", severity="information", timeout=1)
+        except GitHubClientError as e:
+            logger.error("Failed to reorder task: %s", e)
+            self.notify(f"Failed to reorder: {e}", severity="error", timeout=5)
 
     def action_move_task_down(self) -> None:
         """Move current task down in column."""
@@ -360,8 +398,15 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        if self.board_service.reorder_task(task_id, 1):
-            screen.refresh_board(focus_task_id=task_id)
+        try:
+            if self.board_service.reorder_task(task_id, 1):
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify("Moved down", timeout=1)
+            else:
+                self.notify("Already at bottom", severity="information", timeout=1)
+        except GitHubClientError as e:
+            logger.error("Failed to reorder task: %s", e)
+            self.notify(f"Failed to reorder: {e}", severity="error", timeout=5)
 
     def action_archive_task(self) -> None:
         """Archive the current task."""

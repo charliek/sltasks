@@ -18,7 +18,7 @@ board:
     # ... priority definitions
 ```
 
-> **Note:** External providers (GitHub, Jira) are planned for future releases. Currently only `file` is supported.
+> **Note:** GitHub Projects is supported. Jira integration is planned for a future release.
 
 ## Board configuration
 
@@ -273,3 +273,116 @@ All fields are optional. Missing fields use defaults:
 | `priority` | `medium` (configurable, see Priorities section) |
 | `type` | (none) |
 | `tags` | `[]` |
+
+## GitHub Provider
+
+Use GitHub Projects as your task backend instead of local markdown files.
+
+### Quick Setup
+
+Run the interactive setup command:
+
+```bash
+sltasks --github-setup
+# Or provide the project URL directly:
+sltasks --github-setup https://github.com/users/USERNAME/projects/1
+```
+
+This auto-detects your project's Status columns and generates a complete configuration.
+
+### GitHub Configuration Reference
+
+```yaml
+provider: github
+task_root: .tasks    # Still used for local cache/templates
+
+github:
+  project_url: https://github.com/users/USERNAME/projects/1
+  default_repo: username/repository   # Repository for new issues
+  default_status: To Do               # Optional: status for new items
+  priority_field: Priority            # Optional: project field for priority
+
+board:
+  columns:
+    # Auto-generated from GitHub Status field
+    - id: to_do
+      title: To Do
+    - id: in_progress
+      title: In Progress
+    - id: done
+      title: Done
+  types:
+    - id: feature
+      color: blue
+    - id: bug
+      color: red
+  priorities:
+    - id: low
+      label: Low
+      color: green
+    - id: medium
+      label: Medium
+      color: yellow
+    - id: high
+      label: High
+      color: orange1
+```
+
+### GitHub Configuration Options
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `project_url` | Yes | GitHub project URL (user or org format) |
+| `default_repo` | Yes | Repository for creating new issues (`owner/repo`) |
+| `default_status` | No | Status to assign to new items |
+| `priority_field` | No | Single-select project field for priority |
+
+### Column Auto-Detection
+
+Columns are automatically derived from your GitHub project's Status field using slugification:
+
+| GitHub Status | Column ID |
+|---------------|-----------|
+| "To Do" | `to_do` |
+| "In Progress" | `in_progress` |
+| "Done" | `done` |
+| "In Review" | `in_review` |
+
+### Priority from Project Fields
+
+If your project has a single-select field like "Priority" or "Severity", you can map it:
+
+```yaml
+github:
+  priority_field: Priority  # Name of the field in your project
+```
+
+Priority options are mapped by position: first option = lowest priority.
+
+If no `priority_field` is configured, priority is read from issue labels instead.
+
+### Authentication
+
+The GitHub provider authenticates via:
+
+1. `GITHUB_TOKEN` environment variable, or
+2. `gh` CLI (if authenticated via `gh auth login`)
+
+**Required token scopes:** `read:project`, `project`, `repo`
+
+### Type and Priority Labels
+
+When creating or updating issues, types and priorities can be synced to GitHub labels using the `canonical_alias` field:
+
+```yaml
+board:
+  types:
+    - id: bug
+      color: red
+      canonical_alias: bug        # Label name in GitHub
+  priorities:
+    - id: high
+      label: High
+      color: orange1
+      canonical_alias: priority:high  # Label name in GitHub
+```

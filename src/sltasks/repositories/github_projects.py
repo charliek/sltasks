@@ -779,9 +779,21 @@ class GitHubProjectsRepository:
         # Update status field if state changed
         self._fetch_project_metadata()  # Ensure status field info is loaded
         status_name = self._map_state_to_status(task.state)
-        if status_name and self._status_field_id:
+        if not status_name:
+            logger.warning(
+                "Could not map state '%s' to GitHub status - status will not be updated",
+                task.state,
+            )
+        elif not self._status_field_id:
+            logger.warning("Status field ID not set - cannot update status")
+        else:
             option_id = self._status_options.get(status_name)
-            if option_id:
+            if not option_id:
+                logger.warning(
+                    "Status '%s' has no matching option ID - status will not be updated",
+                    status_name,
+                )
+            else:
                 logger.debug("Updating status to: %s", status_name)
                 client.mutate(
                     UPDATE_ITEM_FIELD,
