@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sltasks.models import GitHubProviderData, Task
+from sltasks.models import BoardOrder, GitHubProviderData, Task
 from sltasks.models.sltasks_config import (
     BoardConfig,
     ColumnConfig,
@@ -521,8 +521,8 @@ class TestGitHubProjectsRepositoryBoardOrder:
 class TestGitHubReorderTask:
     """Tests for GitHub Projects task reordering."""
 
-    def test_reorder_task_calls_position_mutation(self, repo, mock_client):
-        """Verify reorder_task calls UPDATE_ITEM_POSITION mutation."""
+    def test_reorder_task_moves_down_and_calls_api(self, repo, mock_client):
+        """Verify reorder_task with delta=1 moves task down and calls API."""
         task1 = Task(
             id="testuser/testrepo#1",
             title="Task 1",
@@ -552,20 +552,27 @@ class TestGitHubReorderTask:
             "testuser/testrepo#2": task2,
         }
         repo._project_id = "PVT_project"
-        repo._project_metadata_fetched = True
+        # Set up board order: task1, task2
+        repo._board_order = BoardOrder(
+            columns={"to_do": ["testuser/testrepo#1", "testuser/testrepo#2"]}
+        )
 
-        result = repo.reorder_task("testuser/testrepo#1", "testuser/testrepo#2")
+        # Move task1 down (delta=1)
+        result = repo.reorder_task("testuser/testrepo#1", 1)
 
         assert result is True
+        # After swap: task2, task1 - so task1 should be after task2
         mock_client.mutate.assert_called_once()
         call_args = mock_client.mutate.call_args
         assert call_args[0][1]["projectId"] == "PVT_project"
         assert call_args[0][1]["itemId"] == "PVTI_item1"
         assert call_args[0][1]["afterId"] == "PVTI_item2"
+        # Verify board order was updated
+        assert repo._board_order.columns["to_do"] == ["testuser/testrepo#2", "testuser/testrepo#1"]
 
-    def test_reorder_task_to_first_position(self, repo, mock_client):
+    def test_reorder_task_moves_up_to_first_position(self, repo, mock_client):
         """Verify afterId is None when moving to first position."""
-        task = Task(
+        task1 = Task(
             id="testuser/testrepo#1",
             title="Task 1",
             state="to_do",
@@ -577,15 +584,37 @@ class TestGitHubReorderTask:
                 issue_number=1,
             ),
         )
-        repo._tasks = {"testuser/testrepo#1": task}
+        task2 = Task(
+            id="testuser/testrepo#2",
+            title="Task 2",
+            state="to_do",
+            priority="medium",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_item2",
+                issue_node_id="I_456",
+                repository="testuser/testrepo",
+                issue_number=2,
+            ),
+        )
+        repo._tasks = {
+            "testuser/testrepo#1": task1,
+            "testuser/testrepo#2": task2,
+        }
         repo._project_id = "PVT_project"
-        repo._project_metadata_fetched = True
+        # Set up board order: task1, task2
+        repo._board_order = BoardOrder(
+            columns={"to_do": ["testuser/testrepo#1", "testuser/testrepo#2"]}
+        )
 
-        result = repo.reorder_task("testuser/testrepo#1", None)
+        # Move task2 up (delta=-1) to first position
+        result = repo.reorder_task("testuser/testrepo#2", -1)
 
         assert result is True
         call_args = mock_client.mutate.call_args
+        # task2 is now at index 0, so afterId should be None
         assert call_args[0][1]["afterId"] is None
+        # Verify board order was updated
+        assert repo._board_order.columns["to_do"] == ["testuser/testrepo#2", "testuser/testrepo#1"]
 
     def test_reorder_task_with_invalid_task_returns_false(self, repo):
         """Verify returns False if task not found."""
@@ -597,13 +626,14 @@ class TestGitHubReorderTask:
             priority="medium",
         )
         repo._tasks = {"dummy": dummy_task}
+        repo._board_order = BoardOrder(columns={"to_do": ["dummy"]})
 
-        result = repo.reorder_task("nonexistent", None)
+        result = repo.reorder_task("nonexistent", -1)
 
         assert result is False
 
-    def test_reorder_task_with_invalid_after_task(self, repo, mock_client):
-        """Verify handles missing after_task gracefully (uses None)."""
+    def test_reorder_task_at_boundary_returns_false(self, repo, mock_client):
+        """Verify returns False when at boundary (can't move further)."""
         task = Task(
             id="testuser/testrepo#1",
             title="Task 1",
@@ -618,15 +648,14 @@ class TestGitHubReorderTask:
         )
         repo._tasks = {"testuser/testrepo#1": task}
         repo._project_id = "PVT_project"
-        repo._project_metadata_fetched = True
+        repo._board_order = BoardOrder(columns={"to_do": ["testuser/testrepo#1"]})
 
-        # after_task_id doesn't exist
-        result = repo.reorder_task("testuser/testrepo#1", "nonexistent")
+        # Try to move up when already at top
+        result = repo.reorder_task("testuser/testrepo#1", -1)
 
-        assert result is True
-        call_args = mock_client.mutate.call_args
-        # Should still call mutation but with afterId=None
-        assert call_args[0][1]["afterId"] is None
+        assert result is False
+        # API should not be called
+        mock_client.mutate.assert_not_called()
 
 
 class TestGitHubFetchRepoLabels:

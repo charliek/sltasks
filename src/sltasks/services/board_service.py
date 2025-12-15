@@ -121,13 +121,8 @@ class BoardService:
         """Get the current board order."""
         return self.repository.get_board_order()
 
-    def save_board_order(self, order: BoardOrder) -> None:
-        """Save the board order."""
-        self.repository.save_board_order(order)
-
     def reorder_task(self, task_id: str, delta: int) -> bool:
-        """
-        Reorder task within its column.
+        """Reorder task within its column.
 
         Args:
             task_id: Task ID to reorder
@@ -136,41 +131,11 @@ class BoardService:
         Returns:
             True if task was moved
         """
-        task = self.repository.get_by_id(task_id)
-        if task is None:
-            logger.debug("reorder_task: task not found: %s", task_id)
-            return False
-
-        board_order = self.repository.get_board_order()
-        column = board_order.columns.get(task.state, [])
-
-        if task_id not in column:
-            logger.debug("reorder_task: task not in column order: %s", task_id)
-            return False
-
-        current_idx = column.index(task_id)
-        new_idx = current_idx + delta
-
-        # Check bounds
-        if new_idx < 0 or new_idx >= len(column):
-            logger.debug("reorder_task: at boundary, cannot move: %s", task_id)
-            return False
-
-        # Swap positions
-        column[current_idx], column[new_idx] = column[new_idx], column[current_idx]
-
-        # Save updated order (local)
-        self.repository.save_board_order(board_order)
-
-        # Persist position to backend (e.g., GitHub API call)
-        after_task_id = column[new_idx - 1] if new_idx > 0 else None
-        self.repository.reorder_task(task_id, after_task_id)
-
-        direction = "up" if delta < 0 else "down"
-        logger.debug(
-            "Task reordered %s: %s (pos %d -> %d)", direction, task_id, current_idx, new_idx
-        )
-        return True
+        result = self.repository.reorder_task(task_id, delta)
+        if result:
+            direction = "up" if delta < 0 else "down"
+            logger.debug("Task reordered %s: %s", direction, task_id)
+        return result
 
     def reload(self) -> None:
         """Reload board state from filesystem."""

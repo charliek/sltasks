@@ -129,16 +129,43 @@ class FilesystemRepository:
         self._board_order = order
         self._save_board_order()
 
-    def reorder_task(
-        self,
-        task_id: str,  # noqa: ARG002
-        after_task_id: str | None,  # noqa: ARG002
-    ) -> bool:
-        """Reorder a task to appear after another task.
+    def reorder_task(self, task_id: str, delta: int) -> bool:
+        """Reorder a task within its column.
 
-        For filesystem, ordering is already persisted via save_board_order(),
-        so this is a no-op that returns True (args unused, names must match protocol).
+        Handles bounds checking, swapping positions, and persisting to tasks.yaml.
+
+        Args:
+            task_id: The task to move
+            delta: Position change (-1 = move up, +1 = move down)
+
+        Returns:
+            True if task was moved, False if at boundary or not found
         """
+        # Get task to find its state/column
+        task = self.get_by_id(task_id)
+        if task is None:
+            return False
+
+        # Load board order
+        self._load_board_order()
+        if self._board_order is None:
+            return False
+
+        column = self._board_order.columns.get(task.state, [])
+        if task_id not in column:
+            return False
+
+        # Bounds check
+        current_idx = column.index(task_id)
+        new_idx = current_idx + delta
+        if new_idx < 0 or new_idx >= len(column):
+            return False
+
+        # Swap
+        column[current_idx], column[new_idx] = column[new_idx], column[current_idx]
+
+        # Persist
+        self._save_board_order()
         return True
 
     def rename_in_board_order(self, old_task_id: str, new_task_id: str) -> None:

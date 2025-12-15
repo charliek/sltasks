@@ -173,36 +173,60 @@ class GitHubProjectsRepository:
         # Note: Individual task moves are handled in save() by updating
         # the Status field. Position reordering uses reorder_task().
 
-    def reorder_task(self, task_id: str, after_task_id: str | None) -> bool:
-        """Reorder a task to appear after another task in GitHub Projects.
+    def reorder_task(self, task_id: str, delta: int) -> bool:
+        """Reorder a task within its column in GitHub Projects.
+
+        Handles bounds checking, swapping positions in local cache,
+        and persisting via the GitHub API.
 
         Args:
             task_id: The task to move
-            after_task_id: The task it should appear after (None for first position)
+            delta: Position change (-1 = move up, +1 = move down)
 
         Returns:
-            True if reordering was persisted to GitHub
+            True if task was moved, False if at boundary or not found
         """
         task = self.get_by_id(task_id)
         if task is None or not isinstance(task.provider_data, GitHubProviderData):
             logger.warning("reorder_task: task not found or invalid provider: %s", task_id)
             return False
 
+        # Ensure board order is loaded
+        if self._board_order is None:
+            self._build_board_order()
+        if self._board_order is None:
+            return False
+
+        column = self._board_order.columns.get(task.state, [])
+        if task_id not in column:
+            logger.warning("reorder_task: task not in column order: %s", task_id)
+            return False
+
+        # Bounds check
+        current_idx = column.index(task_id)
+        new_idx = current_idx + delta
+        if new_idx < 0 or new_idx >= len(column):
+            logger.debug("reorder_task: at boundary, cannot move: %s", task_id)
+            return False
+
+        # Swap in local cache
+        column[current_idx], column[new_idx] = column[new_idx], column[current_idx]
+
+        # Compute after_task_id for GitHub API
+        after_task_id = column[new_idx - 1] if new_idx > 0 else None
         after_item_id = None
         if after_task_id:
-            after_task = self.get_by_id(after_task_id)
+            after_task = self._tasks.get(after_task_id)
             if after_task and isinstance(after_task.provider_data, GitHubProviderData):
                 after_item_id = after_task.provider_data.project_item_id
-            else:
-                logger.warning("reorder_task: after_task not found: %s", after_task_id)
 
+        # Make API call
         client = self._ensure_client()
         self._fetch_project_metadata()
 
         logger.debug(
-            "Reordering task %s after %s (item_id=%s, after_id=%s)",
+            "Reordering task %s (item_id=%s, after_id=%s)",
             task_id,
-            after_task_id,
             task.provider_data.project_item_id,
             after_item_id,
         )

@@ -239,14 +239,13 @@ class TestBoardServiceReorder:
             result = board_service.reorder_task("task1.md", 1)  # Move down
 
         assert result is True
-        # After moving task1 down, order is [task2, task1]
-        # task1 is at index 1, so after_task_id should be task2 (index 0)
-        mock_reorder.assert_called_once_with("task1.md", "task2.md")
+        # BoardService now passes through delta directly to repository
+        mock_reorder.assert_called_once_with("task1.md", 1)
 
-    def test_reorder_task_to_top_calls_with_none(
+    def test_reorder_task_passes_delta_to_repository(
         self, board_service: BoardService, task_dir: Path, repo: FilesystemRepository
     ):
-        """reorder_task to first position calls reorder_task with after_task_id=None."""
+        """reorder_task passes delta to repository.reorder_task."""
         create_task_file(task_dir, "task1.md", "todo")
         create_task_file(task_dir, "task2.md", "todo")
         board_service.load_board()
@@ -256,9 +255,8 @@ class TestBoardServiceReorder:
 
         with patch.object(repo, "reorder_task") as mock_reorder:
             mock_reorder.return_value = True
-            result = board_service.reorder_task("task2.md", -1)  # Move up to first
+            result = board_service.reorder_task("task2.md", -1)  # Move up
 
         assert result is True
-        # After moving task2 up, order is [task2, task1]
-        # task2 is at index 0, so after_task_id should be None
-        mock_reorder.assert_called_once_with("task2.md", None)
+        # BoardService passes delta directly to repository
+        mock_reorder.assert_called_once_with("task2.md", -1)
