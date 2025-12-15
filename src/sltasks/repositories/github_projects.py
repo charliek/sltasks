@@ -794,19 +794,21 @@ class GitHubProjectsRepository:
                     },
                 )
 
-        # Update task with provider data
+        # Update task with provider data (task is immutable, create copy)
         task_id = f"{repo}#{issue_data['number']}"
-        task.id = task_id
-        task.provider_data = GitHubProviderData(
-            project_item_id=item_data["id"],
-            issue_node_id=issue_data["id"],
-            repository=repo,
-            issue_number=issue_data["number"],
+        task = task.model_copy(
+            update={
+                "id": task_id,
+                "provider_data": GitHubProviderData(
+                    project_item_id=item_data["id"],
+                    issue_node_id=issue_data["id"],
+                    repository=repo,
+                    issue_number=issue_data["number"],
+                ),
+                "created": self._parse_timestamp(issue_data.get("createdAt")),
+                "updated": self._parse_timestamp(issue_data.get("updatedAt")),
+            }
         )
-
-        # Update timestamps
-        task.created = self._parse_timestamp(issue_data.get("createdAt"))
-        task.updated = self._parse_timestamp(issue_data.get("updatedAt"))
 
         # Cache the task
         self._tasks[task_id] = task

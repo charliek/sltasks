@@ -338,3 +338,47 @@ class TestTaskOptionalPriority:
         task = Task(id="test.md", title="Test", state="todo", priority="high")
         fm = task.to_frontmatter()
         assert fm["priority"] == "high"
+
+
+class TestTaskImmutability:
+    """Tests for Task model immutability (frozen=True)."""
+
+    def test_task_is_immutable_attribute_assignment(self):
+        """Task model should raise error on attribute assignment."""
+        import pydantic
+        import pytest
+
+        task = Task(id="test.md", title="Original Title")
+
+        # Attempting to mutate should raise ValidationError
+        with pytest.raises(pydantic.ValidationError):
+            task.title = "New Title"
+
+    def test_task_model_copy_creates_new_instance(self):
+        """model_copy creates a new Task with updated values."""
+        original = Task(id="test.md", title="Original", priority="low")
+
+        updated = original.model_copy(update={"title": "Updated", "priority": "high"})
+
+        # Original unchanged
+        assert original.title == "Original"
+        assert original.priority == "low"
+
+        # Updated has new values
+        assert updated.title == "Updated"
+        assert updated.priority == "high"
+
+        # Same id preserved
+        assert updated.id == "test.md"
+
+    def test_task_model_copy_with_nested_list(self):
+        """model_copy correctly handles list fields like tags."""
+        original = Task(id="test.md", title="Test", tags=["tag1", "tag2"])
+
+        updated = original.model_copy(update={"tags": ["new-tag"]})
+
+        # Original tags unchanged
+        assert original.tags == ["tag1", "tag2"]
+
+        # Updated has new tags
+        assert updated.tags == ["new-tag"]

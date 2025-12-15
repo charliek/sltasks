@@ -1082,10 +1082,14 @@ class TestGitHubUpdateIssueWithLabels:
 
 
 class TestGitHubReturnsCopies:
-    """Tests for repository methods returning copies to prevent cache mutation."""
+    """Tests for repository methods returning copies to prevent cache mutation.
 
-    def test_get_by_id_returns_copy_not_reference(self, repo):
-        """get_by_id returns a deep copy, not a reference to cached task."""
+    With frozen Task model, these tests verify that returned tasks are separate
+    instances from cached tasks, enabling proper old-vs-new comparison during save.
+    """
+
+    def test_get_by_id_returns_separate_instance(self, repo):
+        """get_by_id returns a separate instance, not the cached task."""
         # Setup: populate the cache with a task
         original_task = Task(
             id="testuser/testrepo#1",
@@ -1105,17 +1109,15 @@ class TestGitHubReturnsCopies:
         # Get the task
         returned_task = repo.get_by_id("testuser/testrepo#1")
 
-        # Mutate the returned task
-        returned_task.title = "Modified Title"
-        returned_task.tags.append("new_tag")
-
-        # The cached task should NOT be affected
+        # Verify it's a separate instance (different object identity)
         cached_task = repo._tasks["testuser/testrepo#1"]
-        assert cached_task.title == "Original Title"
-        assert cached_task.tags == ["tag1", "tag2"]
+        assert returned_task is not cached_task
+        # But has the same values
+        assert returned_task.title == cached_task.title
+        assert returned_task.tags == cached_task.tags
 
-    def test_get_all_returns_copies_not_references(self, repo):
-        """get_all returns deep copies, not references to cached tasks."""
+    def test_get_all_returns_separate_instances(self, repo):
+        """_sorted_tasks returns separate instances, not cached tasks."""
         # Setup: populate the cache with tasks
         original_task = Task(
             id="testuser/testrepo#1",
@@ -1136,17 +1138,15 @@ class TestGitHubReturnsCopies:
         # Get all tasks (uses _sorted_tasks internally)
         tasks = repo._sorted_tasks()
 
-        # Mutate the returned task
-        tasks[0].title = "Modified Title"
-        tasks[0].tags.append("new_tag")
-
-        # The cached task should NOT be affected
+        # Verify returned task is a separate instance
         cached_task = repo._tasks["testuser/testrepo#1"]
-        assert cached_task.title == "Original Title"
-        assert cached_task.tags == ["tag1", "tag2"]
+        assert tasks[0] is not cached_task
+        # But has the same values
+        assert tasks[0].title == cached_task.title
+        assert tasks[0].tags == cached_task.tags
 
-    def test_tag_changes_detected_after_mutation(self, repo):
-        """Tag changes are correctly detected when task is mutated then saved."""
+    def test_tag_changes_detected_with_model_copy(self, repo):
+        """Tag changes are correctly detected when using model_copy for updates."""
         # Setup cache with original task
         original_task = Task(
             id="testuser/testrepo#1",
@@ -1167,13 +1167,13 @@ class TestGitHubReturnsCopies:
         repo._status_options = {"To Do": "opt_todo"}
         repo._repo_labels = {"testuser/testrepo": {"new-tag": "LA_newtag", "old-tag": "LA_oldtag"}}
 
-        # Get task (returns copy), mutate it, then save
+        # Get task (returns copy), create updated version with model_copy
         task = repo.get_by_id("testuser/testrepo#1")
-        task.tags = ["new-tag"]
+        updated_task = task.model_copy(update={"tags": ["new-tag"]})
 
         # Compute label changes - old_task from cache should have ["old-tag"]
         old_task = repo._tasks.get("testuser/testrepo#1")
-        labels_to_add, labels_to_remove = repo._compute_label_changes(task, old_task)
+        labels_to_add, labels_to_remove = repo._compute_label_changes(updated_task, old_task)
 
         # Should detect the tag change
         assert "new-tag" in labels_to_add
@@ -1205,12 +1205,12 @@ class TestGitHubReturnsCopies:
         tasks = repo._sorted_tasks()
         task = tasks[0]
 
-        # User edits task (mutates it)
-        task.tags = ["new-tag"]
+        # User edits task (creates new instance with model_copy since Task is frozen)
+        updated_task = task.model_copy(update={"tags": ["new-tag"]})
 
         # Compute label changes - old_task from cache should have ["old-tag"]
         old_task = repo._tasks.get("testuser/testrepo#1")
-        labels_to_add, labels_to_remove = repo._compute_label_changes(task, old_task)
+        labels_to_add, labels_to_remove = repo._compute_label_changes(updated_task, old_task)
 
         # Should detect the tag change
         assert "new-tag" in labels_to_add

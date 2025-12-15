@@ -178,8 +178,8 @@ class TaskService:
 
         Updates the 'updated' timestamp automatically.
         """
-        task.updated = now_utc()
-        return self.repository.save(task)
+        updated_task = task.model_copy(update={"updated": now_utc()})
+        return self.repository.save(updated_task)
 
     def delete_task(self, task_id: str) -> None:
         """Delete a task by ID."""
@@ -228,9 +228,9 @@ class TaskService:
             new_filepath = task_root / new_task_id
             filepath.rename(new_filepath)
 
-            # Update task with new ID
+            # Update task with new ID (immutable, so create copy)
             old_task_id = task.id
-            task.id = new_task_id
+            task = task.model_copy(update={"id": new_task_id})
 
             # Update board order to reflect the rename
             self.repository.rename_in_board_order(old_task_id, new_task_id)
@@ -326,18 +326,21 @@ class TaskService:
                 if parsed.get("type"):
                     parsed["type"] = board_config.resolve_type(parsed["type"])
 
-            # Apply changes to task
-            task.title = parsed.get("title", task.title)
-            task.body = parsed.get("body", task.body)
+            # Build updates dict for immutable task
+            updates: dict = {
+                "title": parsed.get("title", task.title),
+                "body": parsed.get("body", task.body),
+            }
             if "priority" in parsed:
-                task.priority = parsed["priority"]
+                updates["priority"] = parsed["priority"]
             if "type" in parsed:
-                task.type = parsed["type"]
+                updates["type"] = parsed["type"]
             if "tags" in parsed:
-                task.tags = parsed["tags"]
+                updates["tags"] = parsed["tags"]
 
-            # Save will handle all mutations via repository
-            self.repository.save(task)
+            # Create updated task and save
+            updated_task = task.model_copy(update=updates)
+            self.repository.save(updated_task)
 
             logger.info("GitHub issue #%d updated after editing", task.provider_data.issue_number)
             return True

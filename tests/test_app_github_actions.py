@@ -471,11 +471,12 @@ class TestObjectAliasingBug:
     The fix captures original_state before calling move operations.
     """
 
-    def test_move_task_right_detects_change_with_aliased_object(self):
-        """Verify move is detected even when screen and result are same object.
+    def test_move_task_right_detects_change_with_immutable_task(self):
+        """Verify move is detected when board_service returns new immutable Task.
 
-        This is the core aliasing scenario: get_current_task() and move_task_right()
-        return the same Task object from cache. The fix uses original_state to detect change.
+        With frozen Task model, board_service.move_task_right() returns a new Task
+        instance with updated state. The app detects this change by comparing
+        original_state with result.state.
         """
         from sltasks.app import SltasksApp
 
@@ -484,8 +485,8 @@ class TestObjectAliasingBug:
         app.board_service = MagicMock()
 
         mock_screen = MagicMock()
-        # Single shared task object (simulates cache aliasing)
-        shared_task = Task(
+        # Original task (frozen/immutable)
+        original_task = Task(
             id="testuser/testrepo#1",
             title="Test Task",
             state="to_do",
@@ -498,15 +499,14 @@ class TestObjectAliasingBug:
             ),
         )
 
-        mock_screen.get_current_task.return_value = shared_task
+        mock_screen.get_current_task.return_value = original_task
 
-        def move_and_modify(_task_id):
+        def move_and_return_new(_task_id):
             # Simulates what board_service.move_task_right does:
-            # modifies task.state and returns the same object
-            shared_task.state = "in_progress"
-            return shared_task
+            # returns a NEW Task with updated state (Task is immutable)
+            return original_task.model_copy(update={"state": "in_progress"})
 
-        app.board_service.move_task_right.side_effect = move_and_modify
+        app.board_service.move_task_right.side_effect = move_and_return_new
 
         with (
             patch.object(SltasksApp, "screen", new_callable=PropertyMock, return_value=mock_screen),
@@ -518,8 +518,8 @@ class TestObjectAliasingBug:
         app.notify.assert_called_once_with("Moved to in progress", timeout=2)
         mock_screen.refresh_board.assert_called_once()
 
-    def test_move_task_left_detects_change_with_aliased_object(self):
-        """Verify move is detected even when screen and result are same object."""
+    def test_move_task_left_detects_change_with_immutable_task(self):
+        """Verify move is detected when board_service returns new immutable Task."""
         from sltasks.app import SltasksApp
 
         app = SltasksApp.__new__(SltasksApp)
@@ -527,7 +527,7 @@ class TestObjectAliasingBug:
         app.board_service = MagicMock()
 
         mock_screen = MagicMock()
-        shared_task = Task(
+        original_task = Task(
             id="testuser/testrepo#1",
             title="Test Task",
             state="in_progress",
@@ -540,13 +540,13 @@ class TestObjectAliasingBug:
             ),
         )
 
-        mock_screen.get_current_task.return_value = shared_task
+        mock_screen.get_current_task.return_value = original_task
 
-        def move_and_modify(_task_id):
-            shared_task.state = "to_do"
-            return shared_task
+        def move_and_return_new(_task_id):
+            # Returns a NEW Task with updated state (Task is immutable)
+            return original_task.model_copy(update={"state": "to_do"})
 
-        app.board_service.move_task_left.side_effect = move_and_modify
+        app.board_service.move_task_left.side_effect = move_and_return_new
 
         with (
             patch.object(SltasksApp, "screen", new_callable=PropertyMock, return_value=mock_screen),

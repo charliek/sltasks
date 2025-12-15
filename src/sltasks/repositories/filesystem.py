@@ -83,9 +83,9 @@ class FilesystemRepository:
 
         filepath = self.get_filepath(task)
 
-        # Set provider data if not already set
+        # Set provider data if not already set (task is immutable, create copy)
         if task.provider_data is None:
-            task.provider_data = FileProviderData()
+            task = task.model_copy(update={"provider_data": FileProviderData()})
 
         # Build front matter document
         post = frontmatter.Post(task.body)
@@ -212,8 +212,9 @@ class FilesystemRepository:
             config = self._get_board_config()
             canonical_state = config.resolve_status(task.state)
             if canonical_state != task.state:
+                # Task is immutable, create copy with normalized state
                 # We don't save immediately - file keeps alias until next save
-                task.state = canonical_state
+                task = task.model_copy(update={"state": canonical_state})
 
             return task
         except Exception:

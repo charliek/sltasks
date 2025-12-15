@@ -126,10 +126,11 @@ class TestFilesystemRepository:
         )
         repo.save(task)
 
-        # Update it
-        task.title = "Updated Title"
-        task.state = STATE_IN_PROGRESS
-        repo.save(task)
+        # Update it (Task is frozen, use model_copy)
+        updated_task = task.model_copy(
+            update={"title": "Updated Title", "state": STATE_IN_PROGRESS}
+        )
+        repo.save(updated_task)
 
         # Reload and verify
         reloaded = repo.get_by_id("update-me.md")

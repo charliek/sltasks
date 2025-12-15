@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .provider_data import OptionalProviderData
 
@@ -14,7 +14,13 @@ STATE_ARCHIVED = "archived"
 
 
 class Task(BaseModel):
-    """Represents a single task from a markdown file."""
+    """Represents a single task from a markdown file.
+
+    This model is frozen (immutable) to prevent cache mutation bugs.
+    Use task.model_copy(update={...}) to create modified copies.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     # Task identification
     id: str  # e.g., "fix-login-bug.md" (filesystem), "PROJ-123" (Jira), "#456" (GitHub)

@@ -106,9 +106,9 @@ class TestTaskServiceUpdate:
         task = task_service.create_task("Update Me")
         original_updated = task.updated
 
-        # Modify and update
-        task.title = "Updated Title"
-        updated_task = task_service.update_task(task)
+        # Modify and update (Task is frozen, use model_copy)
+        modified_task = task.model_copy(update={"title": "Updated Title"})
+        updated_task = task_service.update_task(modified_task)
 
         assert updated_task.updated > original_updated
         assert updated_task.title == "Updated Title"

@@ -62,14 +62,19 @@ class BoardService:
         config = self._get_board_config()
         canonical_state = config.resolve_status(to_state)
 
-        task.state = canonical_state
-        task.updated = now_utc()
+        # Create updated task (immutable model)
+        updated_task = task.model_copy(
+            update={
+                "state": canonical_state,
+                "updated": now_utc(),
+            }
+        )
 
         # Save updates the file and yaml
-        self.repository.save(task)
+        self.repository.save(updated_task)
 
         logger.info("Task moved: %s (%s -> %s)", task_id, old_state, canonical_state)
-        return task
+        return updated_task
 
     def move_task_left(self, task_id: str) -> Task | None:
         """Move task to the previous column (e.g., in_progress -> todo)."""
