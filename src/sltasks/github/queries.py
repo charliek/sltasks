@@ -323,3 +323,12 @@ query GetRepositoryLabels($owner: String!, $name: String!) {
   }
 }
 """
+
+# Query to get authenticated user's login (for @me expansion in filters)
+GET_VIEWER = """
+query GetViewer {
+  viewer {
+    login
+  }
+}
+"""

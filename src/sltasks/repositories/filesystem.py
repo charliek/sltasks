@@ -249,6 +249,30 @@ class FilesystemRepository:
             # TODO: Consider logging this
             return None
 
+    def has_github_metadata(self, task_id: str) -> bool:
+        """Check if a task file has GitHub sync metadata.
+
+        This indicates the file was synced from GitHub rather than created locally.
+        Used by the push engine to identify local-only files.
+
+        Args:
+            task_id: The task ID (filename)
+
+        Returns:
+            True if file has github: section with synced: true
+        """
+        filepath = self.task_root / task_id
+        if not filepath.exists():
+            return False
+
+        try:
+            post = frontmatter.load(filepath)  # pyrefly: ignore[bad-argument-type]
+            metadata = dict(post.metadata)  # pyrefly: ignore[bad-argument-type]
+            github_data = metadata.get("github", {})
+            return isinstance(github_data, dict) and github_data.get("synced", False) is True
+        except Exception:
+            return False
+
     def _load_board_order(self) -> None:
         """Load tasks.yaml if it exists."""
         if self._board_order is not None:

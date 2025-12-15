@@ -50,6 +50,58 @@ def parse_args() -> argparse.Namespace:
         metavar="PROJECT_URL",
         help="Interactive setup for GitHub Projects integration. Optionally pass project URL.",
     )
+
+    # Subcommands
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Push command: sltasks push [files...]
+    push_parser = subparsers.add_parser(
+        "push",
+        help="Push local tasks to GitHub as new issues",
+    )
+    push_parser.add_argument(
+        "files",
+        nargs="*",
+        help="Specific files to push (default: all local-only tasks)",
+    )
+    push_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be pushed without creating issues",
+    )
+    push_parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt",
+    )
+    push_parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="Delete local files after pushing",
+    )
+    push_parser.add_argument(
+        "--archive",
+        action="store_true",
+        help="Archive local files after pushing (set archived: true)",
+    )
+
+    # Sync command: sltasks sync
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Sync issues from GitHub to local files",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be synced without writing files",
+    )
+    sync_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite local changes (resolve conflicts to GitHub)",
+    )
+
     return parser.parse_args()
 
 
@@ -87,7 +139,31 @@ def main() -> None:
         exit_code = run_github_setup(settings.project_root, project_url)
         raise SystemExit(exit_code)
 
-    # Import here to avoid circular imports
+    # Handle subcommands
+    if args.command == "push":
+        from .cli.push import run_push
+
+        exit_code = run_push(
+            project_root=settings.project_root,
+            files=args.files if args.files else None,
+            dry_run=args.dry_run,
+            yes=args.yes,
+            delete=args.delete,
+            archive=args.archive,
+        )
+        raise SystemExit(exit_code)
+
+    if args.command == "sync":
+        from .cli.sync import run_sync
+
+        exit_code = run_sync(
+            project_root=settings.project_root,
+            dry_run=args.dry_run,
+            force=args.force,
+        )
+        raise SystemExit(exit_code)
+
+    # Default: launch TUI
     from .app import run
 
     run(settings)

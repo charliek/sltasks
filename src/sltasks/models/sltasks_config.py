@@ -105,6 +105,18 @@ class TypeConfig(BaseModel):
         """
         return self.canonical_alias or self.id
 
+    def matches_label(self, label: str) -> bool:
+        """Check if a label matches this type config.
+
+        Matches against id, type_alias list, or canonical_alias (case-insensitive).
+        """
+        label_lower = label.lower()
+        if self.id.lower() == label_lower:
+            return True
+        if any(alias.lower() == label_lower for alias in self.type_alias):
+            return True
+        return bool(self.canonical_alias and self.canonical_alias.lower() == label_lower)
+
 
 def _validate_color(v: str) -> str:
     """Validate color is a valid named color or hex code."""
@@ -158,6 +170,18 @@ class PriorityConfig(BaseModel):
         Returns canonical_alias if set, otherwise the id.
         """
         return self.canonical_alias or self.id
+
+    def matches_label(self, label: str) -> bool:
+        """Check if a label matches this priority config.
+
+        Matches against id, priority_alias list, or canonical_alias (case-insensitive).
+        """
+        label_lower = label.lower()
+        if self.id.lower() == label_lower:
+            return True
+        if any(alias.lower() == label_lower for alias in self.priority_alias):
+            return True
+        return bool(self.canonical_alias and self.canonical_alias.lower() == label_lower)
 
 
 class BoardConfig(BaseModel):
@@ -440,6 +464,23 @@ class BoardConfig(BaseModel):
         )
 
 
+class GitHubSyncConfig(BaseModel):
+    """GitHub filesystem sync configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable filesystem sync for GitHub issues",
+    )
+    task_root: str | None = Field(
+        default=None,
+        description="Override task_root for synced files (defaults to global task_root)",
+    )
+    filters: list[str] = Field(
+        default_factory=list,
+        description="GitHub search syntax filters (OR'd together)",
+    )
+
+
 class GitHubConfig(BaseModel):
     """GitHub Projects configuration."""
 
@@ -494,6 +535,10 @@ class GitHubConfig(BaseModel):
     include_drafts: bool = Field(
         default=False,
         description="Include draft issues in the board",
+    )
+    sync: GitHubSyncConfig | None = Field(
+        default=None,
+        description="Filesystem sync configuration",
     )
 
     @field_validator("owner_type")
