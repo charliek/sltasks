@@ -42,14 +42,14 @@ class TestTaskFromFrontmatter:
         )
         assert task.state == STATE_TODO
 
-    def test_from_frontmatter_missing_priority_uses_default(self):
-        """Missing priority defaults to 'medium'."""
+    def test_from_frontmatter_missing_priority_is_none(self):
+        """Missing priority results in None."""
         task = Task.from_frontmatter(
             task_id="task.md",
             metadata={},
             body="",
         )
-        assert task.priority == "medium"
+        assert task.priority is None
 
 
 class TestTaskDisplayTitle:
@@ -305,3 +305,36 @@ class TestBoardOrderDynamic:
         order.ensure_column("todo")
 
         assert order.columns["todo"] == ["task.md"]
+
+
+class TestTaskOptionalPriority:
+    """Tests for Task model with optional (None) priority."""
+
+    def test_task_default_priority_is_none(self):
+        """Task model defaults priority to None."""
+        task = Task(id="test.md", title="Test Task")
+        assert task.priority is None
+
+    def test_from_frontmatter_without_priority_is_none(self):
+        """Task.from_frontmatter without priority field results in None."""
+        metadata = {"title": "Test", "state": "todo"}
+        task = Task.from_frontmatter("test.md", metadata, "Body content")
+        assert task.priority is None
+
+    def test_from_frontmatter_with_priority_is_set(self):
+        """Task.from_frontmatter with priority field sets it correctly."""
+        metadata = {"title": "Test", "state": "todo", "priority": "high"}
+        task = Task.from_frontmatter("test.md", metadata, "Body content")
+        assert task.priority == "high"
+
+    def test_to_frontmatter_excludes_none_priority(self):
+        """Task.to_frontmatter excludes priority when None."""
+        task = Task(id="test.md", title="Test", state="todo", priority=None)
+        fm = task.to_frontmatter()
+        assert "priority" not in fm
+
+    def test_to_frontmatter_includes_set_priority(self):
+        """Task.to_frontmatter includes priority when set."""
+        task = Task(id="test.md", title="Test", state="todo", priority="high")
+        fm = task.to_frontmatter()
+        assert fm["priority"] == "high"

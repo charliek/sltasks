@@ -24,6 +24,61 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def format_github_task_for_preview(task: Task) -> str:
+    """Format a GitHub task for preview with YAML frontmatter.
+
+    Shows all fields (no comments) including read-only fields.
+    This is a module-level function that doesn't require a TaskService instance.
+
+    Args:
+        task: The task to format (must have GitHubProviderData)
+
+    Returns:
+        Formatted markdown string with YAML frontmatter
+    """
+    lines = ["---"]
+
+    # Title
+    lines.append(f"title: {task.title or ''}")
+
+    # State
+    lines.append(f"state: {task.state}")
+
+    # Priority (only if set)
+    if task.priority:
+        lines.append(f"priority: {task.priority}")
+
+    # Type
+    if task.type:
+        lines.append(f"type: {task.type}")
+
+    # Tags
+    if task.tags:
+        lines.append("tags:")
+        for tag in task.tags:
+            lines.append(f"  - {tag}")
+    else:
+        lines.append("tags: []")
+
+    # Issue reference (from provider_data)
+    if isinstance(task.provider_data, GitHubProviderData):
+        issue_ref = f"{task.provider_data.repository}#{task.provider_data.issue_number}"
+        lines.append(f"issue: {issue_ref}")
+
+    # Timestamps
+    if task.created:
+        lines.append(f"created: '{task.created.isoformat()}'")
+
+    if task.updated:
+        lines.append(f"updated: '{task.updated.isoformat()}'")
+
+    lines.append("---")
+    lines.append("")
+    lines.append(task.body or "")
+
+    return "\n".join(lines)
+
+
 class TaskService:
     """Service for task CRUD operations."""
 
@@ -80,8 +135,8 @@ class TaskService:
 
         now = now_utc()
 
-        # Base values (always set)
-        final_priority = priority if priority is not None else "medium"
+        # Base values
+        final_priority = priority  # None is valid - means unset
         final_tags = tags if tags is not None else []
         body = ""
 
@@ -294,14 +349,12 @@ class TaskService:
     def _format_github_task_for_editing(self, task: Task) -> str:
         """Format a GitHub task for editing with YAML frontmatter.
 
-        Includes:
-        - Editable fields: title, priority, type, tags (with valid options comments)
-        - Read-only fields (commented): state, issue reference, created, updated
-        - Body after frontmatter
+        Includes editable fields: title, priority, type, tags (with valid options comments).
+        Read-only fields (state, issue, timestamps) are not shown since they can't be changed.
         """
         # Calculate column width for right-aligned comments
         # Find the longest value line to align comments
-        priority_line = f"priority: {task.priority}"
+        priority_line = f"priority: {task.priority or ''}"
         type_line = f"type: {task.type or ''}"
         tags_line = "tags:"
 
@@ -345,23 +398,6 @@ class TaskService:
                 lines.append(f"  - {tag}")
         else:
             lines.append(pad_comment("tags: []", tags_comment))
-
-        # Empty line before read-only section
-        lines.append("")
-
-        # Read-only fields as comments
-        lines.append("# Read-only fields (changes will be ignored):")
-        lines.append(f"# state: {task.state}")
-
-        if isinstance(task.provider_data, GitHubProviderData):
-            issue_ref = f"{task.provider_data.repository}#{task.provider_data.issue_number}"
-            lines.append(f"# issue: {issue_ref}")
-
-        if task.created:
-            lines.append(f"# created: '{task.created.isoformat()}'")
-
-        if task.updated:
-            lines.append(f"# updated: '{task.updated.isoformat()}'")
 
         lines.append("---")
         lines.append("")

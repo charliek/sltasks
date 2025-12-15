@@ -63,6 +63,10 @@ class TaskCard(Widget, can_focus=True):
 
     def _format_priority(self) -> str:
         """Format priority for display using config."""
+        # Handle None/unset priority
+        if self._task_data.priority is None:
+            return "[dim]—[/]"
+
         if self._priority_config:
             # Use configured color, symbol, and label
             color = self._priority_config.color

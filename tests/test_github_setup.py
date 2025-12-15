@@ -274,11 +274,14 @@ class TestGenerateYaml:
             "github": {"project_url": "https://example.com"},
         }
 
-        result = generate_yaml(config)
+        result = generate_yaml(config, "owner/repo")
 
         assert "# sltasks GitHub Projects Configuration" in result
         assert "provider: github" in result
         assert "project_url: https://example.com" in result
+        # Check that default_repo is substituted in header
+        assert "gh label create" in result
+        assert "--repo owner/repo" in result
 
     def test_yaml_is_parseable(self):
         """Generated YAML can be parsed back."""
@@ -295,8 +298,21 @@ class TestGenerateYaml:
             },
         }
 
-        yaml_str = generate_yaml(config)
+        yaml_str = generate_yaml(config, "test/repo")
         parsed = yaml.safe_load(yaml_str)
 
         assert parsed["provider"] == "github"
         assert parsed["github"]["project_url"] == "https://github.com/users/test/projects/1"
+
+    def test_includes_optional_fields_footer(self):
+        """Generated YAML includes optional fields footer."""
+        config = {"provider": "github", "github": {"project_url": "https://example.com"}}
+
+        result = generate_yaml(config, "owner/repo")
+
+        assert "Optional GitHub Settings" in result
+        assert "base_url:" in result
+        assert "include_prs:" in result
+        assert "include_closed:" in result
+        assert "include_drafts:" in result
+        assert "allowed_repos:" in result

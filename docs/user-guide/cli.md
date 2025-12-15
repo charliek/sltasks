@@ -64,7 +64,7 @@ This command:
 5. Generates and previews the configuration
 6. Writes `sltasks.yml` (with backup if exists)
 
-See [Configuration - GitHub Provider](configuration.md#github-provider) for details.
+See the [GitHub Provider Guide](../providers/github-provider.md) for details.
 
 ### -v, --verbose
 

@@ -23,7 +23,7 @@ class Task(BaseModel):
     # Front matter fields (all optional with defaults)
     title: str | None = None  # Defaults to filename without .md
     state: str = STATE_TODO  # String to support custom states
-    priority: str = "medium"  # String to support configurable priorities
+    priority: str | None = None  # String to support configurable priorities, None = unset
     tags: list[str] = Field(default_factory=list)
     type: str | None = None  # Task type (feature, bug, task, etc.)
     created: datetime | None = None
@@ -49,7 +49,8 @@ class Task(BaseModel):
         if self.title:
             data["title"] = self.title
         data["state"] = self.state
-        data["priority"] = self.priority
+        if self.priority:
+            data["priority"] = self.priority
         if self.tags:
             data["tags"] = self.tags
         if self.type:
@@ -74,7 +75,7 @@ class Task(BaseModel):
             provider_data=provider_data,
             title=metadata.get("title"),
             state=metadata.get("state", STATE_TODO),
-            priority=metadata.get("priority", "medium"),
+            priority=metadata.get("priority"),
             tags=metadata.get("tags", []),
             type=metadata.get("type"),
             created=_parse_datetime(metadata.get("created")),

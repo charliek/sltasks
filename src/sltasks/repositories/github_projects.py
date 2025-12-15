@@ -109,12 +109,15 @@ class GitHubProjectsRepository:
             task_id: Task ID in format "owner/repo#123"
 
         Returns:
-            Task if found, None otherwise
+            Task if found, None otherwise (returns a copy to prevent cache mutation)
         """
         # Ensure tasks are loaded
         if not self._tasks:
             self.get_all()
-        return self._tasks.get(task_id)
+        task = self._tasks.get(task_id)
+        if task:
+            return task.model_copy(deep=True)
+        return None
 
     def save(self, task: Task) -> Task:
         """Save a task (create or update)."""
@@ -615,14 +618,14 @@ class GitHubProjectsRepository:
         item: dict[str, Any],
         labels: list[str],
         github_config: GitHubConfig,
-    ) -> tuple[str, str | None]:
+    ) -> tuple[str | None, str | None]:
         """Extract priority from project field or labels.
 
         If github_config.priority_field is set, reads priority from that field.
         Otherwise falls back to label-based extraction.
 
         Returns:
-            (priority_id, matched_label) - defaults to "medium" if no match
+            (priority_id, matched_label) - returns (None, None) if no match
         """
         # If priority field is configured, try to read from it
         if github_config.priority_field and self._priority_field_id:
@@ -661,11 +664,11 @@ class GitHubProjectsRepository:
 
         return None
 
-    def _extract_priority_from_labels(self, labels: list[str]) -> tuple[str, str | None]:
+    def _extract_priority_from_labels(self, labels: list[str]) -> tuple[str | None, str | None]:
         """Extract priority from labels.
 
         Returns:
-            (priority_id, matched_label) - defaults to "medium" if no match
+            (priority_id, matched_label) - returns (None, None) if no match
         """
         board_config = self._get_board_config()
 
@@ -685,7 +688,7 @@ class GitHubProjectsRepository:
                 ):
                     return priority_config.id, label
 
-        return "medium", None
+        return None, None
 
     def _parse_timestamp(self, ts: str | None) -> datetime | None:
         """Parse ISO timestamp from GitHub."""
@@ -707,9 +710,13 @@ class GitHubProjectsRepository:
             self._board_order.add_task(task_id, task.state)
 
     def _sorted_tasks(self) -> list[Task]:
-        """Return tasks sorted by board order."""
+        """Return tasks sorted by board order.
+
+        Returns deep copies to prevent cache mutation - callers can safely
+        modify these tasks without affecting the repository's internal cache.
+        """
         if self._board_order is None:
-            return list(self._tasks.values())
+            return [task.model_copy(deep=True) for task in self._tasks.values()]
 
         board_config = self._get_board_config()
         column_ids = [col.id for col in board_config.columns] + ["archived"]
@@ -726,7 +733,7 @@ class GitHubProjectsRepository:
                 return (state_idx, pos_idx, task.id)
             return (999, 999, task.id)
 
-        return sorted(self._tasks.values(), key=sort_key)
+        return [task.model_copy(deep=True) for task in sorted(self._tasks.values(), key=sort_key)]
 
     # --- Issue Operations ---
 
@@ -879,7 +886,7 @@ class GitHubProjectsRepository:
 
         # Handle priority label changes (only if NOT using priority field)
         new_priority_label: str | None = None
-        if not github_config.priority_field:
+        if not github_config.priority_field and task.priority:
             priority_config = board_config.get_priority(task.priority)
             if priority_config:
                 new_priority_label = priority_config.write_alias
@@ -978,6 +985,10 @@ class GitHubProjectsRepository:
             return
 
         board_config = self._get_board_config()
+
+        # Skip if no priority set
+        if task.priority is None:
+            return
 
         # Find the priority index
         try:
@@ -1087,9 +1098,11 @@ class GitHubProjectsRepository:
             provider.type_label = None
 
         github_config = self._get_github_config()
-        if not github_config.priority_field:
+        if not github_config.priority_field and task.priority:
             priority_config = board_config.get_priority(task.priority)
             provider.priority_label = priority_config.write_alias if priority_config else None
+        elif not github_config.priority_field:
+            provider.priority_label = None
 
         # Update cache
         self._tasks[task.id] = task

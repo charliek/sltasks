@@ -18,6 +18,7 @@ from sltasks.models.sltasks_config import (
 from sltasks.models.task import STATE_IN_PROGRESS, STATE_TODO
 from sltasks.repositories import FilesystemRepository
 from sltasks.services import TaskService
+from sltasks.services.task_service import format_github_task_for_preview
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ class TestTaskServiceCreate:
         assert task.id == "my-new-task.md"
         assert task.title == "My New Task"
         assert task.state == STATE_TODO
-        assert task.priority == "medium"
+        assert task.priority is None  # None by default (unset)
         assert task.created is not None
         assert task.updated is not None
         assert (task_dir / "my-new-task.md").exists()
@@ -83,6 +84,16 @@ class TestTaskServiceCreate:
         assert task1.id == "same-title.md"
         assert task2.id == "same-title-1.md"
         assert task3.id == "same-title-2.md"
+
+    def test_create_task_without_priority_defaults_to_none(self, task_service: TaskService):
+        """create_task without priority results in None priority."""
+        task = task_service.create_task("No Priority Task")
+        assert task.priority is None
+
+    def test_create_task_with_explicit_priority(self, task_service: TaskService):
+        """create_task with explicit priority sets it correctly."""
+        task = task_service.create_task("High Priority Task", priority="high")
+        assert task.priority == "high"
 
 
 class TestTaskServiceUpdate:
@@ -294,8 +305,8 @@ class TestFormatGitHubTaskForEditing:
         assert "- backend" in result
         assert "- api" in result
 
-    def test_format_includes_readonly_fields_as_comments(self, github_task_service):
-        """Read-only fields are shown as comments."""
+    def test_format_excludes_readonly_fields(self, github_task_service):
+        """Read-only fields are NOT shown in edit mode."""
         task = Task(
             id="testuser/testrepo#1",
             title="Test",
@@ -313,11 +324,12 @@ class TestFormatGitHubTaskForEditing:
 
         result = github_task_service._format_github_task_for_editing(task)
 
-        assert "# state: in_progress" in result
-        assert "# issue: testuser/testrepo#42" in result
-        assert "# created:" in result
-        assert "# updated:" in result
-        assert "# Read-only fields" in result
+        # Read-only fields should NOT be present
+        assert "state:" not in result
+        assert "issue:" not in result
+        assert "created:" not in result
+        assert "updated:" not in result
+        assert "# Read-only fields" not in result
 
     def test_format_includes_valid_options_comments(self, github_task_service):
         """Output includes comments showing valid options."""
@@ -499,3 +511,190 @@ code block
         assert "# Heading" in result["body"]
         assert "- List item 1" in result["body"]
         assert "```python" in result["body"]
+
+
+# --- Tests for GitHub task preview formatting ---
+
+
+class TestFormatGitHubTaskForPreview:
+    """Tests for format_github_task_for_preview function."""
+
+    def test_preview_includes_all_fields(self):
+        """Preview includes all fields including state, issue, timestamps."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test Task",
+            state="in_progress",
+            priority="high",
+            type="bug",
+            tags=["backend", "urgent"],
+            body="Task body",
+            created=datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC),
+            updated=datetime(2025, 1, 2, 12, 0, 0, tzinfo=UTC),
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=42,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        assert "title: Test Task" in result
+        assert "state: in_progress" in result
+        assert "priority: high" in result
+        assert "type: bug" in result
+        assert "- backend" in result
+        assert "- urgent" in result
+        assert "issue: testuser/testrepo#42" in result
+        assert "created:" in result
+        assert "updated:" in result
+
+    def test_preview_state_not_commented(self):
+        """State is shown as a regular field, not commented."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="done",
+            priority="medium",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        assert "state: done" in result
+        assert "# state:" not in result
+
+    def test_preview_includes_issue_reference(self):
+        """Issue reference is shown from provider_data."""
+        task = Task(
+            id="testuser/testrepo#99",
+            title="Test",
+            state="todo",
+            priority="medium",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="myorg/myrepo",
+                issue_number=99,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        assert "issue: myorg/myrepo#99" in result
+
+    def test_preview_includes_timestamps(self):
+        """Created and updated timestamps are shown."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="todo",
+            priority="medium",
+            created=datetime(2025, 6, 15, 10, 30, 0, tzinfo=UTC),
+            updated=datetime(2025, 6, 16, 14, 45, 0, tzinfo=UTC),
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        assert "created: '2025-06-15T10:30:00+00:00'" in result
+        assert "updated: '2025-06-16T14:45:00+00:00'" in result
+
+    def test_preview_no_option_comments(self):
+        """No '# Valid:' or '# Options:' comments in preview."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="todo",
+            priority="high",
+            type="feature",
+            tags=["api"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        assert "# Valid:" not in result
+        assert "# Options:" not in result
+
+    def test_preview_body_after_frontmatter(self):
+        """Body content appears after the closing frontmatter delimiter."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="todo",
+            priority="medium",
+            body="This is the body.\n\nWith paragraphs.",
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        # Body should come after the closing ---
+        parts = result.split("---")
+        assert len(parts) == 3  # Before first ---, frontmatter, after second ---
+        body_section = parts[2]
+        assert "This is the body." in body_section
+        assert "With paragraphs." in body_section
+
+    def test_preview_empty_tags(self):
+        """Empty tags shows tags: []."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="todo",
+            priority="medium",
+            tags=[],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        assert "tags: []" in result
+
+    def test_preview_no_type_when_none(self):
+        """Type field is omitted when task.type is None."""
+        task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="todo",
+            priority="medium",
+            type=None,
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+
+        result = format_github_task_for_preview(task)
+
+        assert "type:" not in result

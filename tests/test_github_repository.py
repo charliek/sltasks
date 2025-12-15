@@ -356,10 +356,10 @@ class TestGitHubProjectsRepositoryLabelMapping:
         assert priority == "high"
         assert label == "high"
 
-    def test_extract_priority_from_labels_no_match_defaults_medium(self, repo):
-        """Priority defaults to medium when no labels match."""
+    def test_extract_priority_from_labels_no_match_returns_none(self, repo):
+        """Priority returns None when no labels match."""
         priority, label = repo._extract_priority_from_labels(["feature", "docs"])
-        assert priority == "medium"
+        assert priority is None
         assert label is None
 
 
@@ -1079,3 +1079,156 @@ class TestGitHubUpdateIssueWithLabels:
 
         # Provider data should now track the type label
         assert result.provider_data.type_label == "feature"
+
+
+class TestGitHubReturnsCopies:
+    """Tests for repository methods returning copies to prevent cache mutation."""
+
+    def test_get_by_id_returns_copy_not_reference(self, repo):
+        """get_by_id returns a deep copy, not a reference to cached task."""
+        # Setup: populate the cache with a task
+        original_task = Task(
+            id="testuser/testrepo#1",
+            title="Original Title",
+            state="to_do",
+            priority="medium",
+            tags=["tag1", "tag2"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+        repo._tasks = {"testuser/testrepo#1": original_task}
+
+        # Get the task
+        returned_task = repo.get_by_id("testuser/testrepo#1")
+
+        # Mutate the returned task
+        returned_task.title = "Modified Title"
+        returned_task.tags.append("new_tag")
+
+        # The cached task should NOT be affected
+        cached_task = repo._tasks["testuser/testrepo#1"]
+        assert cached_task.title == "Original Title"
+        assert cached_task.tags == ["tag1", "tag2"]
+
+    def test_get_all_returns_copies_not_references(self, repo):
+        """get_all returns deep copies, not references to cached tasks."""
+        # Setup: populate the cache with tasks
+        original_task = Task(
+            id="testuser/testrepo#1",
+            title="Original Title",
+            state="to_do",
+            priority="medium",
+            tags=["tag1", "tag2"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+        repo._tasks = {"testuser/testrepo#1": original_task}
+        repo._project_id = "PVT_123"  # Prevent fetch
+
+        # Get all tasks (uses _sorted_tasks internally)
+        tasks = repo._sorted_tasks()
+
+        # Mutate the returned task
+        tasks[0].title = "Modified Title"
+        tasks[0].tags.append("new_tag")
+
+        # The cached task should NOT be affected
+        cached_task = repo._tasks["testuser/testrepo#1"]
+        assert cached_task.title == "Original Title"
+        assert cached_task.tags == ["tag1", "tag2"]
+
+    def test_tag_changes_detected_after_mutation(self, repo):
+        """Tag changes are correctly detected when task is mutated then saved."""
+        # Setup cache with original task
+        original_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            tags=["old-tag"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+        repo._tasks = {"testuser/testrepo#1": original_task}
+        repo._project_id = "PVT_123"
+        repo._status_field_id = "PVTSSF_123"
+        repo._status_options = {"To Do": "opt_todo"}
+        repo._repo_labels = {"testuser/testrepo": {"new-tag": "LA_newtag", "old-tag": "LA_oldtag"}}
+
+        # Get task (returns copy), mutate it, then save
+        task = repo.get_by_id("testuser/testrepo#1")
+        task.tags = ["new-tag"]
+
+        # Compute label changes - old_task from cache should have ["old-tag"]
+        old_task = repo._tasks.get("testuser/testrepo#1")
+        labels_to_add, labels_to_remove = repo._compute_label_changes(task, old_task)
+
+        # Should detect the tag change
+        assert "new-tag" in labels_to_add
+        assert "old-tag" in labels_to_remove
+
+    def test_tag_changes_detected_via_get_all_flow(self, repo):
+        """Tag changes are detected when task comes from get_all (UI flow)."""
+        # Setup cache with original task
+        original_task = Task(
+            id="testuser/testrepo#1",
+            title="Test",
+            state="to_do",
+            priority="medium",
+            tags=["old-tag"],
+            provider_data=GitHubProviderData(
+                project_item_id="PVTI_1",
+                issue_node_id="I_123",
+                repository="testuser/testrepo",
+                issue_number=1,
+            ),
+        )
+        repo._tasks = {"testuser/testrepo#1": original_task}
+        repo._project_id = "PVT_123"
+        repo._status_field_id = "PVTSSF_123"
+        repo._status_options = {"To Do": "opt_todo"}
+        repo._repo_labels = {"testuser/testrepo": {"new-tag": "LA_newtag", "old-tag": "LA_oldtag"}}
+
+        # Simulate UI flow: get_all returns tasks for display
+        tasks = repo._sorted_tasks()
+        task = tasks[0]
+
+        # User edits task (mutates it)
+        task.tags = ["new-tag"]
+
+        # Compute label changes - old_task from cache should have ["old-tag"]
+        old_task = repo._tasks.get("testuser/testrepo#1")
+        labels_to_add, labels_to_remove = repo._compute_label_changes(task, old_task)
+
+        # Should detect the tag change
+        assert "new-tag" in labels_to_add
+        assert "old-tag" in labels_to_remove
+
+
+class TestGitHubExtractPriorityReturnsNone:
+    """Tests for _extract_priority_from_labels returning None."""
+
+    def test_extract_priority_returns_none_when_no_match(self, repo):
+        """_extract_priority_from_labels returns (None, None) when no label matches."""
+        labels = ["unrelated-label", "another-label"]
+        priority, matched_label = repo._extract_priority_from_labels(labels)
+        assert priority is None
+        assert matched_label is None
+
+    def test_extract_priority_returns_none_for_empty_labels(self, repo):
+        """_extract_priority_from_labels returns (None, None) for empty label list."""
+        priority, matched_label = repo._extract_priority_from_labels([])
+        assert priority is None
+        assert matched_label is None

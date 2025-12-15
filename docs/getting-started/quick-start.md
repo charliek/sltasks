@@ -1,11 +1,20 @@
 # Quick Start
 
-## Generate configuration
+## Choose Your Provider
 
-Bootstrap a new sltasks project by generating the default configuration:
+sltasks supports two storage backends:
+
+- **File Provider** (default) - Store tasks as local markdown files. Great for personal projects and git-tracked task management.
+- **GitHub Provider** - Sync with GitHub Projects V2. Ideal for team projects using GitHub Issues.
+
+See [Providers](../providers/index.md) for a detailed comparison.
+
+## File Provider Setup
+
+Bootstrap a new sltasks project with local file storage:
 
 ```bash
-uv run sltasks --generate
+sltasks --generate
 ```
 
 This creates a `sltasks.yml` file in your current directory with the default board configuration.
@@ -56,15 +65,18 @@ uv run sltasks
 
 You'll see a kanban board with your configured columns.
 
-## GitHub Projects Integration
+## GitHub Provider Setup
 
 Want to use GitHub Projects instead of local files? Run the interactive setup:
 
 ```bash
-uv run sltasks --github-setup https://github.com/users/USERNAME/projects/1
+sltasks --github-setup https://github.com/users/USERNAME/projects/1
 ```
 
-This auto-detects your project's columns and generates the configuration. See [GitHub Provider](../user-guide/configuration.md#github-provider) for details.
+This auto-detects your project's columns and generates the configuration.
+
+!!! note "First-time setup"
+    You'll need to set up authentication and create labels in your repository. See the [GitHub Provider Guide](../providers/github-provider.md) for complete setup instructions.
 
 ## Next steps
 
