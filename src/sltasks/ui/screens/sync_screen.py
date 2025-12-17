@@ -9,7 +9,8 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static
+from textual.widgets import Button, OptionList, Static
+from textual.widgets.option_list import Option
 
 if TYPE_CHECKING:
     from ...models.sync import ChangeSet
@@ -50,7 +51,7 @@ class SyncScreen(ModalScreen):
 
     SyncScreen .sync-content {
         height: auto;
-        max-height: 60;
+        max-height: 40;
         padding: 1 0;
     }
 
@@ -118,9 +119,11 @@ class SyncScreen(ModalScreen):
     }
 
     SyncScreen .sync-footer {
+        dock: bottom;
         text-align: center;
         padding-top: 1;
         border-top: solid $primary-darken-2;
+        height: auto;
     }
 
     SyncScreen .footer-buttons {
@@ -134,9 +137,27 @@ class SyncScreen(ModalScreen):
     }
 
     SyncScreen .keybinding-hint {
-        color: $text-muted;
+        color: $text;
         text-align: center;
-        padding-top: 1;
+        margin-top: 1;
+        padding: 0 1;
+    }
+
+    SyncScreen OptionList {
+        height: auto;
+        max-height: 10;
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin-left: 2;
+    }
+
+    SyncScreen OptionList:focus {
+        border: none;
+    }
+
+    SyncScreen OptionList > .option-list--option-highlighted {
+        background: $primary-darken-2;
     }
     """
 
@@ -146,6 +167,7 @@ class SyncScreen(ModalScreen):
         Binding("P", "pull", "Pull", show=True),
         Binding("U", "push", "Push", show=True),
         Binding("r", "refresh", "Refresh", show=True),
+        Binding("space", "toggle_selection", "Toggle", show=True),
     ]
 
     def __init__(self, sync_engine: GitHubSyncEngine) -> None:
@@ -176,7 +198,7 @@ class SyncScreen(ModalScreen):
                         classes="section-header section-header-push",
                         id="push-header",
                     )
-                    yield Static("Loading...", classes="empty-message", id="push-items")
+                    yield OptionList(id="push-list")
 
                 # Conflicts section
                 with Vertical(classes="sync-section", id="conflict-section"):
@@ -195,13 +217,23 @@ class SyncScreen(ModalScreen):
                     yield Button("Close", id="btn-close")
 
                 yield Static(
-                    "[P] Pull  [U] Push  [r] Refresh  [ESC] Close",
+                    "[bold]↑/↓[/] Navigate  [bold]Space[/] Toggle  [bold]P[/] Pull  [bold]U[/] Push  [bold]r[/] Refresh  [bold]Esc[/] Close",
                     classes="keybinding-hint",
                 )
 
     def on_mount(self) -> None:
         """Load sync data when screen mounts."""
         self._refresh_changes()
+        # Focus push list for immediate keyboard navigation
+        self.call_after_refresh(self._focus_push_list)
+
+    def _focus_push_list(self) -> None:
+        """Focus the push list after refresh."""
+        try:
+            push_list = self.query_one("#push-list", OptionList)
+            push_list.focus()
+        except Exception:
+            pass
 
     def _refresh_changes(self) -> None:
         """Refresh the change detection."""
@@ -239,27 +271,7 @@ class SyncScreen(ModalScreen):
             pull_items.update("\n".join(lines))
 
         # Update push section
-        push_header = self.query_one("#push-header", Static)
-        push_items = self.query_one("#push-items", Static)
-        push_count = len(self._changes.to_push)
-        push_header.update(f"Push to GitHub ({push_count} changes)")
-
-        if push_count == 0:
-            push_items.update("[dim]No changes to push[/]")
-            self._push_selections.clear()
-        else:
-            lines: list[str] = []
-            for task_id in self._changes.to_push:
-                # Determine badge based on whether it's local-only or modified
-                if "#" not in task_id:
-                    badge = "[dim][local only][/]"
-                    symbol = "○"
-                else:
-                    badge = "[dim][local mod][/]"
-                    symbol = "●"
-                selected = "✓" if task_id in self._push_selections else " "
-                lines.append(f"  [{selected}] [yellow]{symbol}[/] {task_id} {badge}")
-            push_items.update("\n".join(lines))
+        self._update_push_list()
 
         # Update conflicts section
         conflict_header = self.query_one("#conflict-header", Static)
@@ -283,8 +295,61 @@ class SyncScreen(ModalScreen):
         btn_pull = self.query_one("#btn-pull", Button)
         btn_push = self.query_one("#btn-push", Button)
 
+        push_count = len(self._changes.to_push) if self._changes else 0
         btn_pull.disabled = pull_count == 0 and conflict_count == 0
         btn_push.disabled = push_count == 0
+
+    def _update_push_list(self) -> None:
+        """Update push list with current selections."""
+        push_list = self.query_one("#push-list", OptionList)
+        push_header = self.query_one("#push-header", Static)
+
+        # Save current highlight position
+        highlighted_idx = push_list.highlighted
+
+        push_list.clear_options()
+
+        if not self._changes or not self._changes.to_push:
+            push_header.update("Push to GitHub (0 changes)")
+            push_list.add_option(
+                Option("[dim]No changes to push[/]", id="__empty__", disabled=True)
+            )
+            return
+
+        push_count = len(self._changes.to_push)
+        push_header.update(f"Push to GitHub ({push_count} changes)")
+
+        for task_id in self._changes.to_push:
+            # Determine badge based on whether it's local-only or modified
+            if "#" not in task_id:
+                badge = "[dim][local only][/]"
+                symbol = "○"
+            else:
+                badge = "[dim][local mod][/]"
+                symbol = "●"
+
+            selected = "✓" if task_id in self._push_selections else " "
+            label = f"[{selected}] [yellow]{symbol}[/] {task_id} {badge}"
+            push_list.add_option(Option(label, id=task_id))
+
+        # Restore highlight position if valid
+        if highlighted_idx is not None and highlighted_idx < push_count:
+            push_list.highlighted = highlighted_idx
+
+    def action_toggle_selection(self) -> None:
+        """Toggle selection of highlighted push item."""
+        push_list = self.query_one("#push-list", OptionList)
+        if push_list.highlighted is None:
+            return
+
+        option = push_list.get_option_at_index(push_list.highlighted)
+        if option and option.id and option.id != "__empty__":
+            task_id = option.id
+            if task_id in self._push_selections:
+                self._push_selections.discard(task_id)
+            else:
+                self._push_selections.add(task_id)
+            self._update_push_list()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
