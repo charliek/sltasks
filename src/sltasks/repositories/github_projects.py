@@ -550,6 +550,13 @@ class GitHubProjectsRepository:
         created = self._parse_timestamp(content.get("createdAt"))
         updated = self._parse_timestamp(content.get("updatedAt"))
 
+        # Extract assignees
+        assignees = [
+            node["login"]
+            for node in content.get("assignees", {}).get("nodes", [])
+            if node.get("login")
+        ]
+
         return Task(
             id=task_id,
             title=content.get("title", ""),
@@ -557,6 +564,7 @@ class GitHubProjectsRepository:
             priority=priority,
             type=task_type,
             tags=tags,
+            assignees=assignees,
             body=content.get("body", ""),
             created=created,
             updated=updated,

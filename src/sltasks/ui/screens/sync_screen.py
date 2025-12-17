@@ -12,7 +12,10 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, OptionList, Static
 from textual.widgets.option_list import Option
 
+from ..widgets.push_confirm_modal import PushConfirmModal
+
 if TYPE_CHECKING:
+    from ...models.sltasks_config import GitHubConfig
     from ...models.sync import ChangeSet
     from ...sync.engine import GitHubSyncEngine
 
@@ -164,8 +167,8 @@ class SyncScreen(ModalScreen):
     BINDINGS = [
         Binding("escape", "dismiss", "Close", show=False),
         Binding("q", "dismiss", "Close", show=False),
-        Binding("P", "pull", "Pull", show=True),
-        Binding("U", "push", "Push", show=True),
+        Binding("f", "fetch", "Fetch", show=True),
+        Binding("p", "push", "Push", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("space", "toggle_selection", "Toggle", show=True),
     ]
@@ -211,13 +214,13 @@ class SyncScreen(ModalScreen):
 
             with Vertical(classes="sync-footer"):
                 with Horizontal(classes="footer-buttons"):
-                    yield Button("Pull All", id="btn-pull", variant="success")
+                    yield Button("Fetch All", id="btn-fetch", variant="success")
                     yield Button("Push Selected", id="btn-push", variant="warning")
                     yield Button("Refresh", id="btn-refresh")
                     yield Button("Close", id="btn-close")
 
                 yield Static(
-                    "[bold]↑/↓[/] Navigate  [bold]Space[/] Toggle  [bold]P[/] Pull  [bold]U[/] Push  [bold]r[/] Refresh  [bold]Esc[/] Close",
+                    "[bold]↑/↓[/] Navigate  [bold]Space[/] Toggle  [bold]f[/] Fetch  [bold]p[/] Push  [bold]r[/] Refresh  [bold]Esc[/] Close",
                     classes="keybinding-hint",
                 )
 
@@ -292,11 +295,11 @@ class SyncScreen(ModalScreen):
             conflict_items.update("\n".join(lines))
 
         # Update button states
-        btn_pull = self.query_one("#btn-pull", Button)
+        btn_fetch = self.query_one("#btn-fetch", Button)
         btn_push = self.query_one("#btn-push", Button)
 
         push_count = len(self._changes.to_push) if self._changes else 0
-        btn_pull.disabled = pull_count == 0 and conflict_count == 0
+        btn_fetch.disabled = pull_count == 0 and conflict_count == 0
         btn_push.disabled = push_count == 0
 
     def _update_push_list(self) -> None:
@@ -353,8 +356,8 @@ class SyncScreen(ModalScreen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
-        if event.button.id == "btn-pull":
-            self.action_pull()
+        if event.button.id == "btn-fetch":
+            self.action_fetch()
         elif event.button.id == "btn-push":
             self.action_push()
         elif event.button.id == "btn-refresh":
@@ -362,8 +365,8 @@ class SyncScreen(ModalScreen):
         elif event.button.id == "btn-close":
             self.dismiss()
 
-    def action_pull(self) -> None:
-        """Pull all changes from GitHub."""
+    def action_fetch(self) -> None:
+        """Fetch all changes from GitHub."""
         if not self._changes:
             return
 
@@ -371,14 +374,14 @@ class SyncScreen(ModalScreen):
         conflict_count = len(self._changes.conflicts)
 
         if pull_count == 0 and conflict_count == 0:
-            self.app.notify("Nothing to pull", timeout=2)
+            self.app.notify("Nothing to fetch", timeout=2)
             return
 
         # Confirm if there are conflicts
         if conflict_count > 0:
             # For now, just warn - in future could add confirmation dialog
             self.app.notify(
-                f"Pulling {pull_count + conflict_count} changes (including {conflict_count} conflicts)",
+                f"Fetching {pull_count + conflict_count} changes (including {conflict_count} conflicts)",
                 severity="warning",
                 timeout=3,
             )
@@ -390,13 +393,13 @@ class SyncScreen(ModalScreen):
 
             if result.has_errors:
                 self.app.notify(
-                    f"Pull completed with errors: {result.errors[0]}",
+                    f"Fetch completed with errors: {result.errors[0]}",
                     severity="error",
                     timeout=5,
                 )
             else:
                 self.app.notify(
-                    f"Pulled {result.pulled} changes",
+                    f"Fetched {result.pulled} changes",
                     severity="information",
                     timeout=2,
                 )
@@ -408,8 +411,8 @@ class SyncScreen(ModalScreen):
             self.app.refresh_sync_statuses()  # pyrefly: ignore[missing-attribute]
 
         except Exception as e:
-            logger.error("Pull failed: %s", e)
-            self.app.notify(f"Pull failed: {e}", severity="error", timeout=5)
+            logger.error("Fetch failed: %s", e)
+            self.app.notify(f"Fetch failed: {e}", severity="error", timeout=5)
 
     def action_push(self) -> None:
         """Push selected changes to GitHub."""
@@ -423,35 +426,75 @@ class SyncScreen(ModalScreen):
             self.app.notify("Nothing to push", timeout=2)
             return
 
+        # Separate local-only from modified synced files
+        local_only_ids = [t for t in to_push if "#" not in t]
+        modified_ids = [t for t in to_push if "#" in t]
+
+        # If local-only tasks exist, show confirmation modal
+        if local_only_ids:
+            tasks = self._sync_engine.find_local_only_tasks()
+            tasks_to_push = [t for t in tasks if t.id in local_only_ids]
+            if tasks_to_push:
+                self.app.push_screen(  # pyrefly: ignore[no-matching-overload]
+                    PushConfirmModal(tasks_to_push, self._get_github_config()),
+                    callback=lambda result: self._execute_push(
+                        result, local_only_ids, modified_ids
+                    ),
+                )
+                return
+
+        # No local-only tasks, push modified directly
+        self._execute_push(None, [], modified_ids)
+
+    def _execute_push(
+        self,
+        modal_result: tuple[bool, str] | None,
+        local_only_ids: list[str],
+        modified_ids: list[str],
+    ) -> None:
+        """Execute push with post-action handling.
+
+        Args:
+            modal_result: Result from PushConfirmModal (confirmed, post_action) or None
+            local_only_ids: List of local-only task IDs to push
+            modified_ids: List of modified synced task IDs to push
+        """
+        # If modal was shown and cancelled, abort
+        if local_only_ids and modal_result is None:
+            return
+
+        post_action = modal_result[1] if modal_result else "keep"
+        pushed = 0
+        errors: list[str] = []
+
         try:
-            # Separate local-only from modified synced files
-            local_only_ids = [t for t in to_push if "#" not in t]
-            modified_ids = [t for t in to_push if "#" in t]
-
-            pushed = 0
-            errors = []
-
-            # Push local-only as new issues
+            # Push local-only tasks with post-action
             if local_only_ids:
-                # Find the actual Task objects
                 tasks = self._sync_engine.find_local_only_tasks()
-                tasks_to_push = [t for t in tasks if t.id in local_only_ids]
+                for task in [t for t in tasks if t.id in local_only_ids]:
+                    result = self._sync_engine.push_new_issues([task])
+                    if result.has_errors:
+                        errors.extend(result.errors)
+                    else:
+                        pushed += 1
+                        # Handle post-push action
+                        if post_action in ("delete", "archive") and result.created:
+                            self._sync_engine.handle_pushed_file(
+                                task,
+                                result.created[0],
+                                post_action,  # pyrefly: ignore
+                            )
 
-                if tasks_to_push:
-                    result = self._sync_engine.push_new_issues(tasks_to_push)
-                    pushed += result.success_count
-                    errors.extend(result.errors)
-
-            # Push modified synced files
+            # Push modified synced tasks (no post-action needed)
             if modified_ids:
                 tasks = self._sync_engine.find_modified_synced_tasks()
                 tasks_to_push = [t for t in tasks if t.id in modified_ids]
-
                 if tasks_to_push:
                     result = self._sync_engine.push_updates(tasks_to_push)
                     pushed += result.success_count
                     errors.extend(result.errors)
 
+            # Show result
             if errors:
                 self.app.notify(
                     f"Pushed {pushed} with {len(errors)} errors: {errors[0]}",
@@ -471,6 +514,13 @@ class SyncScreen(ModalScreen):
         except Exception as e:
             logger.error("Push failed: %s", e)
             self.app.notify(f"Push failed: {e}", severity="error", timeout=5)
+
+    def _get_github_config(self) -> GitHubConfig | None:
+        """Get GitHub config from sync engine."""
+        try:
+            return self._sync_engine._get_github_config()  # pyrefly: ignore[private-method]
+        except Exception:
+            return None
 
     def action_refresh(self) -> None:
         """Refresh change detection."""

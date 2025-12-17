@@ -93,6 +93,11 @@ query GetProjectItems($projectId: ID!, $cursor: String) {
                   name
                 }
               }
+              assignees(first: 10) {
+                nodes {
+                  login
+                }
+              }
               createdAt
               updatedAt
               repository {
@@ -109,6 +114,11 @@ query GetProjectItems($projectId: ID!, $cursor: String) {
               labels(first: 20) {
                 nodes {
                   name
+                }
+              }
+              assignees(first: 10) {
+                nodes {
+                  login
                 }
               }
               createdAt

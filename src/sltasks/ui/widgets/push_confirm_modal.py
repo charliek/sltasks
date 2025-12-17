@@ -86,20 +86,27 @@ class PushConfirmModal(ModalScreen[tuple[bool, str] | None]):
     PushConfirmModal Button {
         margin: 0 1;
     }
+
+    PushConfirmModal .keybinding-hint {
+        color: $text-muted;
+        text-align: center;
+        margin-top: 1;
+    }
     """
 
     BINDINGS = [
         Binding("enter", "confirm", "Confirm"),
+        Binding("p", "confirm", "Push"),
         Binding("escape", "cancel", "Cancel"),
     ]
 
     def __init__(
         self,
-        task: Task,
+        tasks: list[Task],
         github_config: GitHubConfig | None = None,
     ) -> None:
         super().__init__()
-        self._push_task = task
+        self._push_tasks = tasks
         self._github_config = github_config
         self._post_action = "keep"
 
@@ -108,10 +115,16 @@ class PushConfirmModal(ModalScreen[tuple[bool, str] | None]):
             yield Label("Push to GitHub?", classes="title")
 
             with Vertical(classes="details"):
-                yield Static(f"[dim]Title:[/] {self._push_task.display_title}")
-                if self._github_config and self._github_config.default_repo:
-                    yield Static(f"[dim]Repository:[/] {self._github_config.default_repo}")
-                yield Static(f"[dim]Status:[/] {self._push_task.state.replace('_', ' ')}")
+                count = len(self._push_tasks)
+                repo = self._github_config.default_repo if self._github_config else "GitHub"
+                yield Static(f"Pushing {count} file{'s' if count > 1 else ''} to {repo}:")
+
+                # List task titles (limit to 5 with "and N more" if many)
+                for task in self._push_tasks[:5]:
+                    yield Static(f"  • {task.display_title}")
+                if len(self._push_tasks) > 5:
+                    remaining = len(self._push_tasks) - 5
+                    yield Static(f"  [dim]...and {remaining} more[/]")
 
             with Vertical(classes="post-action"):
                 yield Label("After push:", classes="post-action-label")
@@ -123,6 +136,11 @@ class PushConfirmModal(ModalScreen[tuple[bool, str] | None]):
             with Center(classes="buttons"):
                 yield Button("Push", id="confirm", variant="primary")
                 yield Button("Cancel", id="cancel")
+
+            yield Static(
+                "[bold]p[/] Push  [bold]Esc[/] Cancel",
+                classes="keybinding-hint",
+            )
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         """Handle post-action selection change."""

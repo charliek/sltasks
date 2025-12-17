@@ -28,6 +28,7 @@ class ParsedFilter:
     state: str = "open"  # "open", "closed", "all"
     repo: str | None = None  # "owner/repo" to filter by repository
     is_wildcard: bool = False  # True if filter is "*"
+    priority: tuple[str, ...] = field(default_factory=tuple)  # Priority IDs to match (any)
 
 
 class FilterParseError(ValueError):
@@ -82,6 +83,7 @@ class SyncFilterParser:
         milestone: str | None = None
         state: str = "open"
         repo: str | None = None
+        priority: list[str] = []
 
         for key, value in self._tokenize(expression):
             key_lower = key.lower()
@@ -107,9 +109,15 @@ class SyncFilterParser:
                 if "/" not in value:
                     raise FilterParseError(f"Invalid repo format '{value}'. Expected 'owner/repo'.")
                 repo = value
+            elif key_lower == "priority":
+                # Parse comma-separated priorities: "priority:p1,p2" -> ["p1", "p2"]
+                priority.extend(p.strip().lower() for p in value.split(",") if p.strip())
             else:
-                # Unknown key - log warning but don't fail (forward compatibility)
-                pass
+                # Unknown key - fail explicitly rather than silently ignore
+                raise FilterParseError(
+                    f"Unknown filter key '{key}'. "
+                    f"Supported: assignee, label, milestone, is, repo, priority"
+                )
 
         return ParsedFilter(
             assignee=assignee,
@@ -117,6 +125,7 @@ class SyncFilterParser:
             milestone=milestone,
             state=state,
             repo=repo,
+            priority=tuple(priority),
         )
 
     def _tokenize(self, expression: str) -> list[tuple[str, str]]:
@@ -141,6 +150,8 @@ class SyncFilterParser:
         filter_: ParsedFilter,
         issue: dict,
         current_user: str,
+        priority_field: str | None = None,
+        board_priorities: list[str] | None = None,
     ) -> bool:
         """Check if an issue matches the filter criteria.
 
@@ -154,7 +165,10 @@ class SyncFilterParser:
                 - milestone: {"title": str} or None
                 - state: "OPEN" or "CLOSED"
                 - repository: {"nameWithOwner": str}
+                - fieldValues: {"nodes": [...]} for project fields
             current_user: Authenticated username (for @me expansion)
+            priority_field: Name of GitHub project field for priority (e.g., "Priority")
+            board_priorities: List of valid priority IDs from board config (e.g., ["p0", "p1", "p2"])
 
         Returns:
             True if issue matches ALL criteria in the filter
@@ -200,13 +214,68 @@ class SyncFilterParser:
             if issue_repo.lower() != filter_.repo.lower():
                 return False
 
+        # Check priority (any in list matches)
+        if filter_.priority:
+            issue_priority = self._get_issue_priority(issue, priority_field, board_priorities)
+            if issue_priority is None or issue_priority.lower() not in filter_.priority:
+                return False
+
         return True
+
+    def _get_issue_priority(
+        self,
+        issue: dict,
+        priority_field: str | None,
+        board_priorities: list[str] | None,
+    ) -> str | None:
+        """Extract priority from issue data.
+
+        Checks priority field first (if configured), then falls back to labels.
+
+        Args:
+            issue: Issue data dict
+            priority_field: Name of GitHub project field for priority
+            board_priorities: List of valid priority IDs from board config
+
+        Returns:
+            Priority ID (lowercase) or None if not found
+        """
+        # Try to get priority from project field
+        if priority_field:
+            field_values = issue.get("fieldValues", {}).get("nodes", [])
+            for fv in field_values:
+                field_name = fv.get("field", {}).get("name", "")
+                if field_name == priority_field:
+                    # Single-select field has "name" attribute
+                    value = fv.get("name")
+                    if value:
+                        # Map field value to priority ID if we have board config
+                        # Field values might be "P1", "P2" etc - normalize to lowercase
+                        return value.lower()
+
+        # Fall back to labels - look for "priority:X" pattern
+        labels = issue.get("labels", [])
+        for label in labels:
+            label_name = label.get("name", "")
+            if label_name.lower().startswith("priority:"):
+                return label_name.split(":", 1)[1].lower()
+
+        # Also check if any label matches a known priority ID
+        if board_priorities:
+            for label in labels:
+                label_name = label.get("name", "").lower()
+                if label_name in [p.lower() for p in board_priorities]:
+                    return label_name
+
+        return None
 
     def matches_any_filter(
         self,
         filters: list[ParsedFilter],
         issue: dict,
         current_user: str,
+        priority_field: str | None = None,
+        board_priorities: list[str] | None = None,
     ) -> bool:
         """Check if an issue matches any of the filters (OR logic).
 
@@ -214,6 +283,8 @@ class SyncFilterParser:
             filters: List of parsed filters
             issue: Issue data dict
             current_user: Authenticated username
+            priority_field: Name of GitHub project field for priority
+            board_priorities: List of valid priority IDs from board config
 
         Returns:
             True if issue matches at least one filter
@@ -222,4 +293,7 @@ class SyncFilterParser:
             # No filters configured - match nothing
             return False
 
-        return any(self.matches_issue(filter_, issue, current_user) for filter_ in filters)
+        return any(
+            self.matches_issue(filter_, issue, current_user, priority_field, board_priorities)
+            for filter_ in filters
+        )

@@ -71,8 +71,11 @@ class TaskCard(Widget, can_focus=True):
         if self._task_data.tags:
             yield Static(self._format_tags(), classes="task-tags")
 
-        # Body preview (first non-empty line)
-        if self._task_data.body.strip():
+        # Show assignee if present, otherwise body preview
+        assignee = self._get_first_assignee()
+        if assignee:
+            yield Static(f"@{assignee}", classes="task-assignee")
+        elif self._task_data.body.strip():
             preview = self._get_body_preview()
             if preview:
                 yield Static(preview, classes="task-preview")
@@ -136,3 +139,9 @@ class TaskCard(Widget, can_focus=True):
             if line and not line.startswith("#"):
                 return self._truncate(line, 50)
         return ""
+
+    def _get_first_assignee(self) -> str | None:
+        """Get first assignee username if any."""
+        if self._task_data.assignees:
+            return self._task_data.assignees[0]
+        return None

@@ -113,8 +113,7 @@ class HelpScreen(ModalScreen):
             # GitHub Sync section
             with Vertical(classes="help-section"):
                 yield Static("GitHub Sync", classes="section-title")
-                yield self._help_row("S", "Open sync management screen")
-                yield self._help_row("p", "Push current task to GitHub")
+                yield self._help_row("s", "Open sync screen (fetch/push)")
 
             # General section
             with Vertical(classes="help-section"):

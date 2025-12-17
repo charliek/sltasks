@@ -343,3 +343,19 @@ class TestOptionalPriority:
         assert loaded is not None
         assert loaded.priority is None
         assert loaded.tags == ["test"]
+
+    def test_save_and_load_preserves_assignees(self, repo: FilesystemRepository):
+        """Round-trip save/load preserves assignees."""
+        task = Task(
+            id="with-assignees.md",
+            title="Has Assignees",
+            state=STATE_TODO,
+            assignees=["alice", "bob"],
+        )
+        repo.save(task)
+
+        # Reload and verify
+        repo.reload()
+        loaded = repo.get_by_id("with-assignees.md")
+        assert loaded is not None
+        assert loaded.assignees == ["alice", "bob"]

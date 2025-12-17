@@ -213,6 +213,73 @@ class TestGitHubProjectsRepositoryGetAll:
         assert isinstance(task.provider_data, GitHubProviderData)
         assert task.provider_data.issue_number == 1
 
+    def test_get_all_extracts_assignees(self, repo, mock_client):
+        """get_all extracts assignees from GitHub issues."""
+        mock_client.query.side_effect = [
+            # First call: get project
+            {
+                "user": {
+                    "projectV2": {
+                        "id": "PVT_123",
+                        "fields": {
+                            "nodes": [
+                                {
+                                    "name": "Status",
+                                    "id": "PVTSSF_123",
+                                    "options": [{"id": "opt_todo", "name": "To Do"}],
+                                }
+                            ]
+                        },
+                    }
+                }
+            },
+            # Second call: get items with assignees
+            {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        "nodes": [
+                            {
+                                "id": "PVTI_1",
+                                "fieldValues": {
+                                    "nodes": [
+                                        {
+                                            "field": {"name": "Status"},
+                                            "name": "To Do",
+                                            "optionId": "opt_todo",
+                                        }
+                                    ]
+                                },
+                                "content": {
+                                    "id": "I_123",
+                                    "number": 1,
+                                    "title": "Test Issue",
+                                    "body": "Issue body",
+                                    "state": "OPEN",
+                                    "labels": {"nodes": []},
+                                    "assignees": {
+                                        "nodes": [
+                                            {"login": "alice"},
+                                            {"login": "bob"},
+                                        ]
+                                    },
+                                    "createdAt": "2025-01-01T00:00:00Z",
+                                    "updatedAt": "2025-01-02T00:00:00Z",
+                                    "repository": {"nameWithOwner": "testuser/testrepo"},
+                                },
+                            }
+                        ],
+                    }
+                }
+            },
+        ]
+
+        tasks = repo.get_all()
+
+        assert len(tasks) == 1
+        task = tasks[0]
+        assert task.assignees == ["alice", "bob"]
+
     def test_get_all_handles_pagination(self, repo, mock_client):
         """get_all handles paginated results."""
         # Setup project metadata and paginated items

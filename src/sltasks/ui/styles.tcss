@@ -124,6 +124,11 @@ TaskCard:focus {
     text-style: italic;
 }
 
+.task-assignee {
+    height: 1;
+    color: lime;
+}
+
 /* Focus state for task title */
 TaskCard:focus .task-title {
     color: $text;

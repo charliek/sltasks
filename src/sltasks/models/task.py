@@ -32,6 +32,7 @@ class Task(BaseModel):
     priority: str | None = None  # String to support configurable priorities, None = unset
     tags: list[str] = Field(default_factory=list)
     type: str | None = None  # Task type (feature, bug, task, etc.)
+    assignees: list[str] = Field(default_factory=list)  # GitHub assignees
     created: datetime | None = None
     updated: datetime | None = None
 
@@ -61,6 +62,8 @@ class Task(BaseModel):
             data["tags"] = self.tags
         if self.type:
             data["type"] = self.type
+        if self.assignees:
+            data["assignees"] = self.assignees
         if self.created:
             data["created"] = self.created.isoformat()
         if self.updated:
@@ -84,6 +87,7 @@ class Task(BaseModel):
             priority=metadata.get("priority"),
             tags=metadata.get("tags", []),
             type=metadata.get("type"),
+            assignees=metadata.get("assignees", []),
             created=_parse_datetime(metadata.get("created")),
             updated=_parse_datetime(metadata.get("updated")),
             body=body,

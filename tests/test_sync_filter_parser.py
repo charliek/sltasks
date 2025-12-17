@@ -21,6 +21,7 @@ class TestParsedFilter:
         assert f.state == "open"
         assert f.repo is None
         assert f.is_wildcard is False
+        assert f.priority == ()
 
     def test_frozen(self):
         """ParsedFilter is immutable."""
@@ -148,12 +149,17 @@ class TestSyncFilterParser:
         f = parser.parse("   ")
         assert f.assignee is None
 
-    # --- Unknown keys (forward compatibility) ---
+    # --- Unknown keys (error handling) ---
 
-    def test_parse_unknown_key_ignored(self, parser: SyncFilterParser):
-        """Unknown keys are ignored for forward compatibility."""
-        f = parser.parse("assignee:test unknown:value")
-        assert f.assignee == "test"
+    def test_parse_unknown_key_raises_error(self, parser: SyncFilterParser):
+        """Unknown keys raise FilterParseError."""
+        with pytest.raises(FilterParseError, match="Unknown filter key 'unknown'"):
+            parser.parse("unknown:value")
+
+    def test_parse_unknown_key_typo_raises_error(self, parser: SyncFilterParser):
+        """Typos in filter keys raise FilterParseError."""
+        with pytest.raises(FilterParseError, match="Unknown filter key"):
+            parser.parse("asignee:@me")  # typo: asignee vs assignee
 
 
 class TestSyncFilterParserMatching:
@@ -362,3 +368,120 @@ class TestMatchesAnyFilter:
             ParsedFilter(is_wildcard=True),
         ]
         assert parser.matches_any_filter(filters, issue, "test") is True
+
+
+class TestPriorityFilter:
+    """Tests for priority filter parsing and matching."""
+
+    @pytest.fixture
+    def parser(self) -> SyncFilterParser:
+        return SyncFilterParser()
+
+    # --- Parsing ---
+
+    def test_parse_priority_single(self, parser: SyncFilterParser):
+        """Parse single priority filter."""
+        f = parser.parse("priority:p1")
+        assert f.priority == ("p1",)
+
+    def test_parse_priority_multiple(self, parser: SyncFilterParser):
+        """Parse comma-separated priorities."""
+        f = parser.parse("priority:p1,p2,p3")
+        assert f.priority == ("p1", "p2", "p3")
+
+    def test_parse_priority_case_normalized(self, parser: SyncFilterParser):
+        """Priority values are normalized to lowercase."""
+        f = parser.parse("priority:P1,P2")
+        assert f.priority == ("p1", "p2")
+
+    def test_parse_priority_with_other_filters(self, parser: SyncFilterParser):
+        """Priority can be combined with other filters."""
+        f = parser.parse("assignee:@me priority:p1,p2")
+        assert f.assignee == "@me"
+        assert f.priority == ("p1", "p2")
+
+    # --- Matching from project field ---
+
+    def test_matches_priority_from_field(self, parser: SyncFilterParser):
+        """Match priority from GitHub project field."""
+        issue = {
+            "fieldValues": {"nodes": [{"field": {"name": "Priority"}, "name": "P1"}]},
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("p1",))
+        assert parser.matches_issue(f, issue, "test", priority_field="Priority") is True
+
+    def test_matches_priority_from_field_no_match(self, parser: SyncFilterParser):
+        """Priority field value doesn't match filter."""
+        issue = {
+            "fieldValues": {"nodes": [{"field": {"name": "Priority"}, "name": "P2"}]},
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("p1",))
+        assert parser.matches_issue(f, issue, "test", priority_field="Priority") is False
+
+    def test_matches_priority_from_field_multiple_options(self, parser: SyncFilterParser):
+        """Match against multiple priority options."""
+        issue = {
+            "fieldValues": {"nodes": [{"field": {"name": "Priority"}, "name": "P2"}]},
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("p1", "p2", "p3"))
+        assert parser.matches_issue(f, issue, "test", priority_field="Priority") is True
+
+    # --- Matching from labels ---
+
+    def test_matches_priority_from_label(self, parser: SyncFilterParser):
+        """Match priority from priority:X label when no priority_field."""
+        issue = {
+            "labels": [{"name": "priority:p1"}],
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("p1",))
+        assert parser.matches_issue(f, issue, "test", priority_field=None) is True
+
+    def test_matches_priority_from_label_no_match(self, parser: SyncFilterParser):
+        """Priority label doesn't match filter."""
+        issue = {
+            "labels": [{"name": "priority:p2"}],
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("p1",))
+        assert parser.matches_issue(f, issue, "test", priority_field=None) is False
+
+    def test_matches_priority_from_known_priority_label(self, parser: SyncFilterParser):
+        """Match priority from known priority ID label."""
+        issue = {
+            "labels": [{"name": "p1"}],
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("p1",))
+        assert (
+            parser.matches_issue(
+                f, issue, "test", priority_field=None, board_priorities=["p0", "p1", "p2"]
+            )
+            is True
+        )
+
+    # --- No priority match ---
+
+    def test_no_priority_no_match(self, parser: SyncFilterParser):
+        """Issue without priority doesn't match priority filter."""
+        issue = {
+            "fieldValues": {"nodes": []},
+            "labels": [],
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("p1",))
+        assert parser.matches_issue(f, issue, "test", priority_field="Priority") is False
+
+    # --- Case insensitivity ---
+
+    def test_priority_case_insensitive(self, parser: SyncFilterParser):
+        """Priority matching is case insensitive."""
+        issue = {
+            "fieldValues": {"nodes": [{"field": {"name": "Priority"}, "name": "HIGH"}]},
+            "state": "OPEN",
+        }
+        f = ParsedFilter(priority=("high",))
+        assert parser.matches_issue(f, issue, "test", priority_field="Priority") is True

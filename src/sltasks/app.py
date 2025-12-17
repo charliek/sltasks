@@ -75,9 +75,8 @@ class SltasksApp(App):
         # Filter mode
         Binding("/", "enter_filter", "Filter", show=True),
         Binding("escape", "escape", "Back", show=False, priority=True),
-        # Sync operations
-        Binding("p", "push_task", "Push", show=True),
-        Binding("S", "sync_screen", "Sync", show=True),
+        # Sync operations (fetch/push via sync screen)
+        Binding("s", "sync_screen", "Sync", show=True),
     ]
 
     SCREENS = {
@@ -627,110 +626,6 @@ class SltasksApp(App):
         screen._update_focus()
 
     # Sync actions
-    def action_push_task(self) -> None:
-        """Push current task to GitHub."""
-        screen = self.screen
-        if not isinstance(screen, BoardScreen):
-            return
-
-        task = screen.get_current_task()
-        if task is None:
-            self.notify("No task selected", severity="warning", timeout=2)
-            return
-
-        # Check if sync/push is available
-        if not self.sync_engine:
-            self.notify("GitHub sync not enabled", severity="warning", timeout=2)
-            return
-
-        # Check sync status for this task
-        sync_status = self._sync_statuses.get(task.id)
-
-        if sync_status == SyncStatus.SYNCED:
-            self.notify("Already synced with GitHub", timeout=2)
-            return
-
-        if sync_status == SyncStatus.CONFLICT:
-            self.notify("Conflict - resolve via 'S' sync screen", severity="warning", timeout=3)
-            return
-
-        if sync_status == SyncStatus.REMOTE_MODIFIED:
-            self.notify(
-                "Remote changes pending - use 'r' to refresh first", severity="warning", timeout=3
-            )
-            return
-
-        # Show push confirmation
-        from .ui.widgets import PushConfirmModal
-
-        self._pending_push_task = task
-        self.push_screen(  # pyrefly: ignore[no-matching-overload]
-            PushConfirmModal(task, self.config_service.get_config().github),
-            callback=self._handle_push_confirm,
-        )
-
-    def _handle_push_confirm(self, result: tuple[bool, str] | None) -> None:
-        """Handle push confirmation result."""
-        if not result:
-            return
-
-        confirmed, post_action = result
-        if not confirmed:
-            return
-
-        task = self._pending_push_task
-        if not task or not self.sync_engine:
-            return
-
-        try:
-            # Determine if this is a new issue or an update
-            sync_status = self._sync_statuses.get(task.id)
-
-            if sync_status == SyncStatus.LOCAL_ONLY:
-                # Push as new issue
-                push_result = self.sync_engine.push_new_issues([task])
-                if push_result.has_errors:
-                    self.notify(
-                        f"Push failed: {push_result.errors[0]}", severity="error", timeout=5
-                    )
-                    return
-
-                self.notify(f"Pushed: {push_result.created[0]}", timeout=2)
-
-                # Handle post-push action
-                if post_action in ("delete", "archive"):
-                    self.sync_engine.handle_pushed_file(
-                        task,
-                        push_result.created[0],
-                        post_action,  # pyrefly: ignore
-                    )
-
-            elif sync_status == SyncStatus.LOCAL_MODIFIED:
-                # Push updates to existing issue
-                push_result = self.sync_engine.push_updates([task])
-                if push_result.has_errors:
-                    self.notify(
-                        f"Push failed: {push_result.errors[0]}", severity="error", timeout=5
-                    )
-                    return
-
-                self.notify(f"Updated: {push_result.created[0]}", timeout=2)
-
-            else:
-                # Nothing to push
-                self.notify("Nothing to push", timeout=2)
-                return
-
-            # Refresh sync statuses and board
-            self.refresh_sync_statuses()
-            screen = self.screen
-            if isinstance(screen, BoardScreen):
-                screen.refresh_board()
-
-        except Exception as e:
-            logger.error("Push failed: %s", e)
-            self.notify(f"Push failed: {e}", severity="error", timeout=5)
-
     def action_sync_screen(self) -> None:
         """Open sync management screen."""
         config = self.config_service.get_config()

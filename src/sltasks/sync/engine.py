@@ -578,6 +578,9 @@ class GitHubSyncEngine:
 
         Returns:
             Filtered list of issues
+
+        Raises:
+            FilterParseError: If a filter expression is invalid
         """
         github_config = self._get_github_config()
         if not github_config.sync:
@@ -588,22 +591,28 @@ class GitHubSyncEngine:
             # No filters = sync nothing (must explicitly configure)
             return []
 
-        # Parse filters
+        # Parse filters - raise on invalid filters (config errors shouldn't be silent)
         parsed_filters: list[ParsedFilter] = []
         for filter_str in filter_strs:
-            try:
-                parsed = self._filter_parser.parse(filter_str)
-                parsed_filters.append(parsed)
-            except Exception as e:
-                logger.warning("Invalid filter '%s': %s", filter_str, e)
+            # FilterParseError will propagate up - this is intentional
+            # Invalid filters should fail loudly, not silently sync everything
+            parsed = self._filter_parser.parse(filter_str)
+            parsed_filters.append(parsed)
 
         if not parsed_filters:
             return []
 
+        # Get priority config for filter matching
+        priority_field = github_config.priority_field
+        board_config = self._get_board_config()
+        board_priorities = [p.id for p in board_config.priorities] if board_config else None
+
         # Apply filters (OR logic)
         filtered = []
         for issue in issues:
-            if self._filter_parser.matches_any_filter(parsed_filters, issue, current_user):
+            if self._filter_parser.matches_any_filter(
+                parsed_filters, issue, current_user, priority_field, board_priorities
+            ):
                 filtered.append(issue)
 
         return filtered
@@ -827,17 +836,34 @@ class GitHubSyncEngine:
         # Extract status and map to state
         state = self._extract_and_map_status(issue)
 
-        # Extract type and priority from labels
+        # Extract type from labels
         labels = [label.get("name", "") for label in issue.get("labels", [])]
         task_type, type_label = self._extract_type_from_labels(labels, board_config)
-        priority, priority_label = self._extract_priority_from_labels(labels, board_config)
+
+        # Extract priority - check field first, then fall back to labels
+        priority: str | None = None
+        priority_label: str | None = None
+        priority_source = "labels"
+
+        if github_config.priority_field:
+            priority = self._extract_priority_from_field(issue, github_config.priority_field)
+            if priority:
+                priority_source = "field"
+
+        if not priority:
+            priority, priority_label = self._extract_priority_from_labels(labels, board_config)
+            priority_source = "labels"
 
         # Filter out type/priority labels from tags
         tags = [label for label in labels if label != type_label and label != priority_label]
 
+        # Extract assignees
+        assignees_data = content.get("assignees", {}).get("nodes", [])
+        assignees = [a.get("login") for a in assignees_data if a.get("login")]
+
         now = datetime.now(UTC)
 
-        metadata = {
+        metadata: dict = {
             "title": title,
             "state": state,
             "priority": priority,
@@ -852,12 +878,16 @@ class GitHubSyncEngine:
                 "project_item_id": issue.get("project_item_id", ""),
                 "issue_node_id": content.get("id", ""),
                 "last_synced": now.isoformat(),
-                "priority_source": "field" if github_config.priority_field else "labels",
+                "priority_source": priority_source,
                 "priority_label": priority_label,
             },
             "push_changes": False,
             "close_on_github": False,
         }
+
+        # Add assignees if present
+        if assignees:
+            metadata["assignees"] = assignees
 
         # Write file
         post = frontmatter.Post(body)
@@ -1098,6 +1128,42 @@ class GitHubSyncEngine:
                 if type_config.matches_label(label):
                     return type_config.id, label
         return None, None
+
+    def _extract_priority_from_field(
+        self,
+        issue: dict,
+        priority_field: str,
+    ) -> str | None:
+        """Extract priority from GitHub project field.
+
+        Maps field values to priority IDs based on board config.
+        Field values like "P1", "P2" are normalized to lowercase.
+
+        Args:
+            issue: Issue dict with fieldValues
+            priority_field: Name of the priority field (e.g., "Priority")
+
+        Returns:
+            Priority ID (lowercase) or None if not found
+        """
+        field_values = issue.get("fieldValues", {}).get("nodes", [])
+        board_config = self._get_board_config()
+
+        for fv in field_values:
+            field_name = fv.get("field", {}).get("name", "")
+            if field_name == priority_field:
+                # Single-select field has "name" attribute
+                value = fv.get("name")
+                if value:
+                    # Try to match against board priorities
+                    value_lower = value.lower()
+                    for priority_config in board_config.priorities:
+                        if priority_config.id.lower() == value_lower:
+                            return priority_config.id
+                    # If no exact match, return the value as-is (lowercase)
+                    return value_lower
+
+        return None
 
     def _extract_priority_from_labels(
         self,

@@ -1,4 +1,4 @@
-"""Sync command for pulling GitHub issues to local files."""
+"""Sync command for fetching GitHub issues to local files."""
 
 import logging
 from pathlib import Path
@@ -17,7 +17,7 @@ def run_sync(
     dry_run: bool = False,
     force: bool = False,
 ) -> int:
-    """Pull issues from GitHub to local files.
+    """Fetch issues from GitHub to local files.
 
     Args:
         project_root: Path to project root containing sltasks.yml
@@ -121,7 +121,7 @@ def _display_change_summary(changes: ChangeSet, dry_run: bool) -> None:
     prefix = "[DRY RUN] " if dry_run else ""
     print()
     print(f"{prefix}Sync Summary:")
-    print(f"  To pull: {len(changes.to_pull)} issue(s)")
+    print(f"  To fetch: {len(changes.to_pull)} issue(s)")
     print(f"  To push: {len(changes.to_push)} file(s)")
     print(f"  Conflicts: {len(changes.conflicts)}")
     print()
@@ -143,7 +143,7 @@ def _display_conflicts(conflicts: list[Conflict]) -> None:
 def _display_dry_run_details(changes: ChangeSet) -> None:
     """Display details of what would be synced."""
     if changes.to_pull:
-        print("Would pull:")
+        print("Would fetch:")
         for issue_key in changes.to_pull:
             print(f"  - {issue_key}")
         print()
