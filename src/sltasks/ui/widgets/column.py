@@ -9,6 +9,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from ...models import Task
+from ...models.sync import SyncStatus
 from .task_card import TaskCard
 
 
@@ -77,6 +78,7 @@ class KanbanColumn(Widget):
         self.title = title
         self.state = state
         self._tasks: list[Task] = []
+        self._sync_statuses: dict[str, SyncStatus] = {}  # task_id -> status
 
     @property
     def _state_css_id(self) -> str:
@@ -99,9 +101,19 @@ class KanbanColumn(Widget):
         count = len(self._tasks)
         return f"{self.title} [dim]({count})[/]"
 
-    def set_tasks(self, tasks: list[Task]) -> None:
-        """Set the tasks for this column."""
+    def set_tasks(
+        self,
+        tasks: list[Task],
+        sync_statuses: dict[str, SyncStatus] | None = None,
+    ) -> None:
+        """Set the tasks for this column.
+
+        Args:
+            tasks: List of tasks to display
+            sync_statuses: Optional dict mapping task_id -> SyncStatus
+        """
         self._tasks = tasks
+        self._sync_statuses = sync_statuses or {}
         # Use call_after_refresh to ensure DOM is ready
         self.call_after_refresh(self._refresh_tasks)
 
@@ -141,10 +153,14 @@ class KanbanColumn(Widget):
                 if board_config:
                     priority_config = board_config.get_priority(task.priority)
 
+                # Get sync status for this task
+                sync_status = self._sync_statuses.get(task.id)
+
                 card = TaskCard(
                     task,
                     type_config=type_config,
                     priority_config=priority_config,
+                    sync_status=sync_status,
                     id=f"task-{css_id}",
                 )
                 await content.mount(card)

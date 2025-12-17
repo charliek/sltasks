@@ -136,6 +136,45 @@ Key `GitHubConfig` fields:
 - `default_status`: Status for new issues
 - `priority_field`: Optional single-select field for priority
 
+### GitHub Sync
+
+The sync feature enables bidirectional synchronization between local markdown files and GitHub issues:
+
+**Features:**
+- **Pull**: Download GitHub issues matching configured filters to local markdown files
+- **Push**: Create new GitHub issues from local markdown files
+- **Push Updates**: Update existing GitHub issues from modified local files
+- **Conflict Detection**: Detect when both local and remote have changed
+
+**Configuration** (in `sltasks.yml` under `github:`):
+```yaml
+github:
+  sync:
+    enabled: true
+    filters:
+      - "assignee:@me"        # Issues assigned to you
+      - "label:urgent"        # Issues with specific labels
+```
+
+**Key Files:**
+- `src/sltasks/sync/engine.py`: Main sync engine (`GitHubSyncEngine`)
+- `src/sltasks/sync/filter_parser.py`: GitHub search syntax filter parser
+- `src/sltasks/sync/file_mapper.py`: Maps between GitHub issues and local filenames
+- `src/sltasks/models/sync.py`: Sync-related models (`SyncStatus`, `ChangeSet`, `Conflict`)
+
+**Synced File Format:**
+Synced files use a special naming convention: `owner-repo#123-slug.md`
+They include extra frontmatter:
+```yaml
+github:
+  synced: true
+  issue_number: 123
+  repository: "owner/repo"
+  last_synced: "2025-01-15T10:30:00Z"
+push_changes: false    # Set to true to push local changes
+close_on_github: false # Set to true to close issue when done
+```
+
 ## Key Keybindings (for context)
 
 - `h/j/k/l` or arrows: Navigation
@@ -143,6 +182,8 @@ Key `GitHubConfig` fields:
 - `K/J` or Shift+up/down: Reorder task within column
 - `n`: New task, `e`: Edit, `a`: Archive, `d`: Delete
 - `/`: Filter mode, `?`: Help, `space`: Toggle state (cycle columns)
+- `S`: Open sync management screen (GitHub sync)
+- `p`: Push current task to GitHub
 
 ## Key Architectural Insights
 

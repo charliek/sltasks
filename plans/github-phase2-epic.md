@@ -260,14 +260,14 @@ sltasks push file1.md     # Push specific files
 
 **Deliverable:** Users can write local `.md` files and run `sltasks push`.
 
-### [Phase 2B: Bidirectional Sync](./github-phase2-phase-b.md)
+### [Phase 2B: Bidirectional Sync](./github-phase2-phase-b.md) - COMPLETE
 **Goal:** Full sync between GitHub and filesystem via CLI.
 
-- Filter parser for GitHub search syntax
-- Sync engine - pull from GitHub
-- Sync engine - push updates to existing issues
-- Conflict detection and resolution
-- `sltasks sync` CLI command
+- [x] Filter parser for GitHub search syntax
+- [x] Sync engine - pull from GitHub
+- [x] Sync engine - push updates to existing issues
+- [x] Conflict detection and resolution
+- [x] `sltasks sync` CLI command
 
 **Deliverable:** Full bidirectional sync via CLI commands.
 

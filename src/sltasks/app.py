@@ -7,7 +7,8 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from .config import Settings
-from .github import GitHubClientError
+from .github import GitHubClient, GitHubClientError
+from .models.sync import SyncStatus
 from .repositories import FilesystemRepository, GitHubProjectsRepository, RepositoryProtocol
 from .services import (
     BoardService,
@@ -16,6 +17,7 @@ from .services import (
     TaskService,
     TemplateService,
 )
+from .sync.engine import GitHubSyncEngine
 from .ui.screens.board import BoardScreen
 from .ui.widgets import (
     CommandBar,
@@ -73,6 +75,9 @@ class SltasksApp(App):
         # Filter mode
         Binding("/", "enter_filter", "Filter", show=True),
         Binding("escape", "escape", "Back", show=False, priority=True),
+        # Sync operations
+        Binding("p", "push_task", "Push", show=True),
+        Binding("S", "sync_screen", "Sync", show=True),
     ]
 
     SCREENS = {
@@ -132,7 +137,80 @@ class SltasksApp(App):
         self.task_service = TaskService(self.repository, self.config_service, self.template_service)
         self.board_service = BoardService(self.repository, self.config_service)
         self.filter_service = FilterService()
+
+        # Initialize sync engine if GitHub sync is enabled
+        self.sync_engine: GitHubSyncEngine | None = None
+        self._sync_statuses: dict[str, SyncStatus] = {}
+        if (
+            config.provider == "github"
+            and config.github
+            and config.github.sync
+            and config.github.sync.enabled
+        ):
+            logger.info("GitHub sync enabled, initializing sync engine")
+            try:
+                client = GitHubClient.from_environment(
+                    base_url=config.github.base_url or "api.github.com"
+                )
+                self.sync_engine = GitHubSyncEngine(
+                    self.config_service,
+                    client,
+                    self.config_service.task_root,
+                )
+            except Exception as e:
+                logger.warning("Failed to initialize sync engine: %s", e)
+
         logger.info("Services initialized")
+
+    @property
+    def sync_statuses(self) -> dict[str, SyncStatus]:
+        """Get current sync statuses for all tasks.
+
+        Lazily computes sync statuses from the sync engine's detect_changes().
+        Returns empty dict if sync is not enabled.
+        """
+        return self._sync_statuses
+
+    def refresh_sync_statuses(self) -> None:
+        """Refresh sync statuses from the sync engine."""
+        if not self.sync_engine:
+            self._sync_statuses = {}
+            return
+
+        try:
+            changes = self.sync_engine.detect_changes()
+
+            # Build status map
+            statuses: dict[str, SyncStatus] = {}
+
+            # Mark tasks that need to be pulled
+            for task_id in changes.to_pull:
+                statuses[task_id] = SyncStatus.REMOTE_MODIFIED
+
+            # Mark tasks that need to be pushed
+            for task_id in changes.to_push:
+                # Check if it's a local-only file or a modified synced file
+                if "#" not in task_id:  # Local-only files don't have repo#number format
+                    statuses[task_id] = SyncStatus.LOCAL_ONLY
+                else:
+                    statuses[task_id] = SyncStatus.LOCAL_MODIFIED
+
+            # Mark conflicts
+            for conflict in changes.conflicts:
+                statuses[conflict.task_id] = SyncStatus.CONFLICT
+
+            # Mark remaining synced files as synced (those not in any change category)
+            synced_files = self.sync_engine._scan_synced_files()
+            for task in synced_files:
+                if task.id not in statuses:
+                    statuses[task.id] = SyncStatus.SYNCED
+
+            self._sync_statuses = statuses
+            logger.debug("Refreshed sync statuses: %d tasks", len(statuses))
+
+        except Exception as e:
+            logger.warning("Failed to refresh sync statuses: %s", e)
+            self._sync_statuses = {}
 
     def on_mount(self) -> None:
         """Called when app is mounted."""
@@ -144,11 +222,19 @@ class SltasksApp(App):
         if hasattr(self.repository, "ensure_directory"):
             self.repository.ensure_directory()
 
+        # Refresh sync statuses if sync is enabled
+        if self.sync_engine:
+            self.refresh_sync_statuses()
+
         # Push the board screen
         self.push_screen("board")
 
     def action_refresh(self) -> None:
         """Refresh the board."""
+        # Refresh sync statuses if enabled
+        if self.sync_engine:
+            self.refresh_sync_statuses()
+
         screen = self.screen
         if isinstance(screen, BoardScreen):
             screen.refresh_board()
@@ -539,6 +625,137 @@ class SltasksApp(App):
 
         screen.load_tasks()
         screen._update_focus()
+
+    # Sync actions
+    def action_push_task(self) -> None:
+        """Push current task to GitHub."""
+        screen = self.screen
+        if not isinstance(screen, BoardScreen):
+            return
+
+        task = screen.get_current_task()
+        if task is None:
+            self.notify("No task selected", severity="warning", timeout=2)
+            return
+
+        # Check if sync/push is available
+        if not self.sync_engine:
+            self.notify("GitHub sync not enabled", severity="warning", timeout=2)
+            return
+
+        # Check sync status for this task
+        sync_status = self._sync_statuses.get(task.id)
+
+        if sync_status == SyncStatus.SYNCED:
+            self.notify("Already synced with GitHub", timeout=2)
+            return
+
+        if sync_status == SyncStatus.CONFLICT:
+            self.notify("Conflict - resolve via 'S' sync screen", severity="warning", timeout=3)
+            return
+
+        if sync_status == SyncStatus.REMOTE_MODIFIED:
+            self.notify(
+                "Remote changes pending - use 'r' to refresh first", severity="warning", timeout=3
+            )
+            return
+
+        # Show push confirmation
+        from .ui.widgets import PushConfirmModal
+
+        self._pending_push_task = task
+        self.push_screen(  # pyrefly: ignore[no-matching-overload]
+            PushConfirmModal(task, self.config_service.get_config().github),
+            callback=self._handle_push_confirm,
+        )
+
+    def _handle_push_confirm(self, result: tuple[bool, str] | None) -> None:
+        """Handle push confirmation result."""
+        if not result:
+            return
+
+        confirmed, post_action = result
+        if not confirmed:
+            return
+
+        task = self._pending_push_task
+        if not task or not self.sync_engine:
+            return
+
+        try:
+            # Determine if this is a new issue or an update
+            sync_status = self._sync_statuses.get(task.id)
+
+            if sync_status == SyncStatus.LOCAL_ONLY:
+                # Push as new issue
+                push_result = self.sync_engine.push_new_issues([task])
+                if push_result.has_errors:
+                    self.notify(
+                        f"Push failed: {push_result.errors[0]}", severity="error", timeout=5
+                    )
+                    return
+
+                self.notify(f"Pushed: {push_result.created[0]}", timeout=2)
+
+                # Handle post-push action
+                if post_action in ("delete", "archive"):
+                    self.sync_engine.handle_pushed_file(
+                        task,
+                        push_result.created[0],
+                        post_action,  # pyrefly: ignore
+                    )
+
+            elif sync_status == SyncStatus.LOCAL_MODIFIED:
+                # Push updates to existing issue
+                push_result = self.sync_engine.push_updates([task])
+                if push_result.has_errors:
+                    self.notify(
+                        f"Push failed: {push_result.errors[0]}", severity="error", timeout=5
+                    )
+                    return
+
+                self.notify(f"Updated: {push_result.created[0]}", timeout=2)
+
+            else:
+                # Nothing to push
+                self.notify("Nothing to push", timeout=2)
+                return
+
+            # Refresh sync statuses and board
+            self.refresh_sync_statuses()
+            screen = self.screen
+            if isinstance(screen, BoardScreen):
+                screen.refresh_board()
+
+        except Exception as e:
+            logger.error("Push failed: %s", e)
+            self.notify(f"Push failed: {e}", severity="error", timeout=5)
+
+    def action_sync_screen(self) -> None:
+        """Open sync management screen."""
+        config = self.config_service.get_config()
+        if not config.github or not config.github.sync or not config.github.sync.enabled:
+            self.notify("Sync not enabled", severity="warning", timeout=2)
+            return
+
+        if not self.sync_engine:
+            self.notify("Sync engine not initialized", severity="error", timeout=3)
+            return
+
+        from .ui.screens.sync_screen import SyncScreen
+
+        self.push_screen(
+            SyncScreen(self.sync_engine),
+            callback=self._handle_sync_screen_close,
+        )
+
+    def _handle_sync_screen_close(self, _result: None) -> None:
+        """Handle sync screen close - refresh the board."""
+        # Refresh sync statuses and board after sync operations
+        self.refresh_sync_statuses()
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.refresh_board()
 
 
 def run(settings: Settings | None = None) -> None:

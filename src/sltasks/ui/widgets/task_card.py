@@ -9,16 +9,27 @@ from textual.widgets import Static
 
 from ...models import Task
 from ...models.sltasks_config import PriorityConfig, TypeConfig
+from ...models.sync import SyncStatus
 
 
 class TaskCard(Widget, can_focus=True):
     """A task card displayed in a column."""
+
+    # Sync status display mapping: (symbol, color)
+    SYNC_STATUS_DISPLAY: dict[SyncStatus, tuple[str, str]] = {
+        SyncStatus.SYNCED: ("●", "green"),
+        SyncStatus.LOCAL_MODIFIED: ("●", "yellow"),
+        SyncStatus.REMOTE_MODIFIED: ("●", "blue"),
+        SyncStatus.CONFLICT: ("⚠", "red"),
+        SyncStatus.LOCAL_ONLY: ("○", "dim"),
+    }
 
     def __init__(
         self,
         task_data: Task,
         type_config: TypeConfig | None = None,
         priority_config: PriorityConfig | None = None,
+        sync_status: SyncStatus | None = None,
         *args,
         **kwargs,
     ) -> None:
@@ -26,6 +37,7 @@ class TaskCard(Widget, can_focus=True):
         self._task_data = task_data
         self._type_config = type_config
         self._priority_config = priority_config
+        self._sync_status = sync_status
 
     @property
     def task(self) -> Task:  # pyrefly: ignore[bad-override]
@@ -38,15 +50,19 @@ class TaskCard(Widget, can_focus=True):
         title = self._truncate(self._task_data.display_title, 40)
         yield Static(title, classes="task-title")
 
-        # Priority and type line
+        # Priority and type line (with optional sync indicator)
         priority_text = self._format_priority()
         type_text = self._format_type()
+        sync_text = self._format_sync_indicator()
 
-        if type_text:
-            # Show both priority and type in a horizontal layout
+        if type_text or sync_text:
+            # Show priority, type, and sync indicator in a horizontal layout
             with Horizontal(classes="task-meta"):
                 yield Static(priority_text, classes="task-priority")
-                yield Static(type_text, classes="task-type")
+                if type_text:
+                    yield Static(type_text, classes="task-type")
+                if sync_text:
+                    yield Static(sync_text, classes="sync-indicator")
         else:
             # Just priority
             yield Static(priority_text, classes="task-priority")
@@ -84,6 +100,16 @@ class TaskCard(Widget, can_focus=True):
         if not self._task_data.type or not self._type_config:
             return ""
         return f"[{self._type_config.color}]●[/] {self._task_data.type}"
+
+    def _format_sync_indicator(self) -> str:
+        """Format sync status indicator. Returns empty string if no sync status."""
+        if self._sync_status is None:
+            return ""
+        display = self.SYNC_STATUS_DISPLAY.get(self._sync_status)
+        if not display:
+            return ""
+        symbol, color = display
+        return f"[{color}]{symbol}[/]"
 
     def _truncate(self, text: str, max_len: int) -> str:
         """Truncate text with ellipsis."""

@@ -52,6 +52,23 @@ CONFIG_HEADER = """\
 # include_closed: (optional) Include closed issues (default: false)
 # include_drafts: (optional) Include draft issues (default: false)
 #
+# === Filesystem Sync Settings ===
+#
+# sync: (optional) Bidirectional sync between local files and GitHub issues
+#   enabled: true/false - Enable filesystem sync
+#   filters: List of GitHub search filters (OR'd together)
+#     - "assignee:@me"     # Issues assigned to you
+#     - "label:urgent"     # Issues with specific label
+#     - "repo:owner/repo"  # Issues from specific repo
+#     - "state:open"       # Only open issues
+#
+# Sync keybindings in TUI:
+#   S - Open sync management screen (pull/push/conflicts)
+#   p - Push current task to GitHub
+#
+# Synced files are named: owner-repo#123-slug.md
+# Edit push_changes: true in frontmatter to push local changes back
+#
 # === Type and Priority Configuration ===
 #
 # canonical_alias: The GitHub label name for write-back
@@ -279,6 +296,8 @@ def generate_config(
     default_status: str | None = None,
     priority_field: str | None = None,
     task_root: str = ".tasks",
+    sync_enabled: bool = False,
+    sync_filters: list[str] | None = None,
 ) -> dict[str, Any]:
     """Generate the full sltasks config dictionary."""
     config: dict[str, Any] = {
@@ -304,6 +323,13 @@ def generate_config(
         config["github"]["default_status"] = default_status
     if priority_field:
         config["github"]["priority_field"] = priority_field
+
+    # Add sync configuration
+    if sync_enabled:
+        config["github"]["sync"] = {
+            "enabled": True,
+            "filters": sync_filters or [],
+        }
 
     return config
 
@@ -380,6 +406,57 @@ def prompt_yes_no(prompt: str, default: bool = False) -> bool:
         return default
 
     return user_input in ("y", "yes")
+
+
+def prompt_sync_config() -> tuple[bool, list[str]]:
+    """Prompt for filesystem sync configuration.
+
+    Returns:
+        Tuple of (enabled, filters)
+    """
+    if not sys.stdin.isatty():
+        return False, []
+
+    header("Filesystem Sync Configuration")
+    print()
+    print("Sync allows you to:")
+    print("  - Cache GitHub issues as local markdown files")
+    print("  - Create issues from local files")
+    print("  - Edit issues offline and push changes")
+    print()
+
+    if not prompt_yes_no("Enable filesystem sync?", default=False):
+        return False, []
+
+    filters: list[str] = []
+
+    # Common filter presets
+    print("\nConfigure sync filters (issues matching ANY filter will sync):")
+    print()
+
+    if prompt_yes_no("Sync issues assigned to you?", default=True):
+        filters.append("assignee:@me")
+        success("Added filter: assignee:@me")
+
+    # Custom filters
+    print("\nYou can add custom filters using GitHub search syntax.")
+    print("Examples: label:urgent, repo:owner/repo, state:open")
+    print()
+
+    while True:
+        custom = prompt_input("Add custom filter (empty to skip)", default="")
+        if not custom:
+            break
+        filters.append(custom)
+        success(f"Added filter: {custom}")
+        if not prompt_yes_no("Add another filter?", default=False):
+            break
+
+    if not filters:
+        info("No filters configured. Add filters to sync.filters in config to enable sync.")
+        return False, []
+
+    return True, filters
 
 
 def prompt_write_action(config_path: Path) -> str:
@@ -529,7 +606,11 @@ def run_github_setup(project_root: Path, project_url: str | None = None) -> int:
 
     success(f"Default repository: {default_repo}")
 
-    # Step 8: Generate config
+    # Step 8: Sync configuration
+    print()
+    sync_enabled, sync_filters = prompt_sync_config()
+
+    # Step 9: Generate config
     config = generate_config(
         project_url=project_url,
         default_repo=default_repo,
@@ -537,11 +618,13 @@ def run_github_setup(project_root: Path, project_url: str | None = None) -> int:
         priorities=priorities,
         default_status=default_status,
         priority_field=priority_field,
+        sync_enabled=sync_enabled,
+        sync_filters=sync_filters,
     )
 
     yaml_content = generate_yaml(config, default_repo)
 
-    # Step 9: Preview and prompt to write
+    # Step 10: Preview and prompt to write
     print("\n" + "=" * 60)
     print("Generated configuration:")
     print("=" * 60)
@@ -559,7 +642,7 @@ def run_github_setup(project_root: Path, project_url: str | None = None) -> int:
         info("Config printed above. Copy and paste to save.")
         return 0
 
-    # Step 10: Write file
+    # Step 11: Write file
     if config_path.exists():
         # Create backup
         backup_path = config_path.with_suffix(".yml.bak")

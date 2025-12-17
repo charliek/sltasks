@@ -7,6 +7,7 @@ from textual.widgets import Footer, Header, Static
 
 from ...models import Task
 from ...models.sltasks_config import BoardConfig
+from ...models.sync import SyncStatus
 from ...services import Filter
 from ..widgets.column import KanbanColumn
 from ..widgets.command_bar import CommandBar
@@ -80,6 +81,11 @@ class BoardScreen(Screen):
         """Load tasks from the board service and populate columns."""
         board = self.app.board_service.load_board()  # pyrefly: ignore[missing-attribute]
 
+        # Get sync statuses if available
+        sync_statuses: dict[str, SyncStatus] = {}
+        if hasattr(self.app, "sync_statuses"):
+            sync_statuses = self.app.sync_statuses  # pyrefly: ignore[missing-attribute]
+
         # Populate each column using config
         for col_id, _title, tasks in board.get_visible_columns(self.board_config):
             # Apply filter if active
@@ -91,7 +97,7 @@ class BoardScreen(Screen):
             widget_id = f"column-{col_id.replace('_', '-')}"
             try:
                 column = self.query_one(f"#{widget_id}", KanbanColumn)
-                column.set_tasks(tasks)
+                column.set_tasks(tasks, sync_statuses)
             except Exception as e:
                 self.log.error(f"Failed to load column {widget_id}: {e}")
 

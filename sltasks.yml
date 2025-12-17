@@ -66,6 +66,11 @@ github:
     - provider:github
     - provider:jira
     - feature:tui
+  sync:
+    enabled: true
+    filters:
+    - assignee:@me
+    - priority:p1,p2
 board:
   columns:
   - id: backlog
@@ -110,3 +115,4 @@ board:
 #   allowed_repos:                  # Whitelist specific repositories
 #     - owner/repo1
 #     - owner/repo2
+# 
