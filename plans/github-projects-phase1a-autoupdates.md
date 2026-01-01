@@ -325,11 +325,6 @@ Execute phases in this order to minimize risk:
 3. **Priority can come from project fields** - via `github.priority_field` config
 4. **Validation now checks columns** - fails if board.columns don't match Status options
 
-### Test Project Info
-- Project URL: https://github.com/users/charliek/projects/2/views/1
-- Repository: https://github.com/charliek/sltasks/issues
-- Token: REDACTED
-
 ---
 
 ## Verification Checklist

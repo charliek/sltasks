@@ -585,6 +585,7 @@ class SltasksConfig(BaseModel):
     """Root configuration from sltasks.yml."""
 
     version: int = 1
+    banner: str | None = Field(default=None, description="Display text for the app banner")
     provider: str = Field(
         default="file",
         description="Storage provider: file, github, github-prs, jira",

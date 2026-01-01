@@ -365,3 +365,19 @@ class TestSltasksConfig:
         with pytest.raises(ValidationError) as exc_info:
             SltasksConfig(task_root="../other")
         assert "within" in str(exc_info.value).lower()
+
+    def test_banner_field_parsing(self):
+        """Banner field is parsed from config."""
+        config = SltasksConfig(banner="My Project")
+        assert config.banner == "My Project"
+
+    def test_banner_field_defaults_to_none(self):
+        """Banner field defaults to None when not set."""
+        config = SltasksConfig()
+        assert config.banner is None
+
+    def test_banner_from_dict(self):
+        """Banner is loaded from dict data."""
+        data = {"version": 1, "banner": "Custom Banner"}
+        config = SltasksConfig(**data)
+        assert config.banner == "Custom Banner"

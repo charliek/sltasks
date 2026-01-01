@@ -159,7 +159,25 @@ class SltasksApp(App):
             except Exception as e:
                 logger.warning("Failed to initialize sync engine: %s", e)
 
+        # Update app banner/title
+        self._update_banner()
+
         logger.info("Services initialized")
+
+    def _update_banner(self) -> None:
+        """Update app banner/title based on config and provider."""
+        banner = self.config_service.get_banner()
+
+        # For GitHub provider, use project title if no explicit banner configured
+        if banner == "sltasks" and hasattr(self.repository, "get_board_metadata"):
+            try:
+                metadata = self.repository.get_board_metadata()
+                if metadata.get("project_title"):
+                    banner = metadata["project_title"]
+            except Exception:
+                pass  # Keep default on error
+
+        self.title = banner
 
     @property
     def sync_statuses(self) -> dict[str, SyncStatus]:
