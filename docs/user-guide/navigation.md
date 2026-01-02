@@ -37,7 +37,12 @@
 |-----|--------|
 | `/` | Enter filter mode |
 | `?` | Show help screen |
+| `r` | Refresh from source |
+| `s` | Sync management screen |
 | `q` | Quit |
+
+!!! note "GitHub-specific keybindings"
+    The `r` (refresh) and `s` (sync) keybindings are primarily for the GitHub provider. Refresh reloads data from GitHub. Sync opens a screen to review and manage pending sync operations.
 
 ## Filtering
 

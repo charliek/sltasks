@@ -287,6 +287,109 @@ github:
   include_drafts: false  # Show draft issues (default: false)
 ```
 
+## Filesystem Sync
+
+Enable bidirectional sync between GitHub and local markdown files. This allows you to:
+
+- Work offline with local copies of your issues
+- Create issues by writing markdown files locally
+- Use LLMs or scripts to generate tasks that sync to GitHub
+
+### Configuration
+
+```yaml
+github:
+  # ... other settings ...
+  sync:
+    enabled: true
+    task_root: .tasks          # Optional: override global task_root
+    filters:
+      - "assignee:@me"         # Issues assigned to you
+      - "label:urgent"         # Issues with specific label
+```
+
+### Filter Syntax
+
+Filters use GitHub search syntax. Multiple filters are OR'd together - an issue syncs if it matches **any** filter.
+
+| Filter | Description |
+|--------|-------------|
+| `assignee:@me` | Issues assigned to authenticated user |
+| `assignee:USER` | Issues assigned to specific user |
+| `label:NAME` | Issues with specific label |
+| `is:open` | Open issues only |
+| `is:closed` | Closed issues only |
+| `milestone:NAME` | Issues in milestone |
+| `repo:owner/repo` | Issues from specific repository |
+| `priority:p1,p2` | Issues with specific priorities |
+| `*` | All issues on the project |
+
+### Synced File Format
+
+Synced files use a naming convention that includes the GitHub issue reference:
+
+```
+owner-repo#123-fix-login-bug.md
+```
+
+They include GitHub metadata in frontmatter:
+
+```yaml
+---
+title: Fix login bug
+state: in_progress
+priority: high
+type: bug
+tags: [auth]
+
+github:
+  synced: true
+  issue_number: 123
+  repository: owner/repo
+  project_item_id: PVTI_xxx
+  issue_node_id: I_xxx
+  last_synced: '2025-01-15T14:00:00Z'
+
+push_changes: false      # Set true to push local edits
+close_on_github: false   # Set true to close issue on delete
+---
+
+Issue body content here...
+```
+
+### Sync Workflow
+
+1. **Pull from GitHub**: Run `sltasks sync`
+   - Fetches issues matching your filters
+   - Creates/updates local markdown files
+
+2. **Create issues locally**: Write new `.md` files in your task directory (without the `github:` section)
+
+3. **Push to GitHub**: Run `sltasks push`
+   - Creates GitHub issues from local-only files
+   - Renames files to include the new issue number
+
+4. **Handle conflicts**: When both local and GitHub have changes since last sync:
+   - Default: GitHub version wins
+   - Use `sltasks sync --force` to overwrite local changes
+   - Set `push_changes: true` in frontmatter to push your local version instead
+
+### CLI Commands
+
+```bash
+# Pull issues from GitHub
+sltasks sync              # Sync matching issues
+sltasks sync --dry-run    # Preview what would sync
+sltasks sync --force      # Overwrite local changes
+
+# Push local tasks to GitHub
+sltasks push              # Push all local-only tasks
+sltasks push --dry-run    # Preview without creating
+sltasks push -y           # Skip confirmation
+```
+
+See [CLI Reference](../user-guide/cli.md#subcommands) for all options.
+
 ## GitHub Enterprise
 
 For GitHub Enterprise, set the `base_url`:
@@ -335,9 +438,3 @@ If type/priority labels aren't being applied:
 2. Check `canonical_alias` matches the exact label name
 3. Verify the labels are in the `default_repo`
 
-## Technical Details
-
-For implementation details, see the design documents:
-
-- [GitHub Projects Integration Requirements](../design/github-projects-integration-requirements.md)
-- [Repository Protocol Design](../design/repository-protocol.md)

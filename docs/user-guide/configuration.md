@@ -6,8 +6,9 @@ The `sltasks.yml` file defines your board configuration. Place it in your projec
 
 ```yaml
 version: 1
-provider: file       # Storage backend: file (default), github, github-prs, jira
+provider: file       # Storage backend: file (default), github
 task_root: .tasks    # Directory for task files
+banner: "My Tasks"   # Optional: custom app title
 
 board:
   columns:
@@ -18,7 +19,21 @@ board:
     # ... priority definitions
 ```
 
-> **Note:** See [Providers](../providers/index.md) for provider-specific setup and configuration (File, GitHub). Jira integration is planned for a future release.
+> **Note:** See [Providers](../providers/index.md) for provider-specific setup and configuration (File, GitHub).
+
+## App Banner
+
+The `banner` field sets the app title shown in the terminal header:
+
+```yaml
+version: 1
+banner: "My Project Tasks"
+```
+
+If not set:
+
+- **GitHub provider**: Uses the GitHub project title automatically
+- **File provider**: Defaults to "sltasks"
 
 ## Board configuration
 

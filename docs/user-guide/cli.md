@@ -91,3 +91,45 @@ Display the current version:
 ```bash
 sltasks --version
 ```
+
+## Subcommands
+
+### sltasks sync
+
+Sync issues from GitHub to local markdown files. Requires GitHub sync to be enabled in your configuration.
+
+```bash
+sltasks sync              # Sync matching issues
+sltasks sync --dry-run    # Preview what would sync
+sltasks sync --force      # Overwrite local changes
+```
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Show what would be synced without writing files |
+| `--force` | Overwrite local changes (resolve conflicts to GitHub version) |
+
+Requires `github.sync.enabled: true` in configuration. See the [GitHub Provider Guide](../providers/github-provider.md#filesystem-sync) for setup.
+
+### sltasks push
+
+Push local tasks to GitHub as new issues:
+
+```bash
+sltasks push                    # Push all local-only tasks
+sltasks push file1.md file2.md  # Push specific files
+sltasks push --dry-run          # Preview without creating issues
+sltasks push -y                 # Skip confirmation prompt
+sltasks push --delete           # Delete files after pushing
+sltasks push --archive          # Archive files after pushing
+```
+
+| Flag | Description |
+|------|-------------|
+| `[files...]` | Specific files to push (default: all local-only tasks) |
+| `--dry-run` | Show what would be pushed without creating issues |
+| `-y, --yes` | Skip confirmation prompt |
+| `--delete` | Delete local files after successful push |
+| `--archive` | Archive local files after push (set `archived: true`) |
+
+After pushing, you'll be prompted to choose what to do with the local files (keep, delete, or archive) unless you specify `--delete` or `--archive`.
