@@ -1,14 +1,8 @@
 # Auto-generated - do not edit manually
-version: 1
 columns:
-  todo:
-  - test-bug.md
-  - setup-ci.md
-  - another-new-bug.md
+  backlog:
+  - charliek-sltasks#2-test-issue-test-edits.md
+  in_review:
+  - charliek-sltasks#6-test-task-from-sltasks.md
   in_progress:
-  - add-dark-mode.md
-  - refactor-api.md
-  done:
-  - fix-login-bug.md
-  - write-docs.md
-  archived: []
+  - charliek-sltasks#3-test-issue-2.md

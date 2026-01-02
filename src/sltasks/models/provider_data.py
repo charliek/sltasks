@@ -8,6 +8,7 @@ The discriminator field is `provider`, which uses Literal types for
 type narrowing support.
 """
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -47,6 +48,10 @@ class GitHubProviderData(BaseModel):
     # Label tracking for roundtrip (original labels that mapped to type/priority)
     type_label: str | None = None
     priority_label: str | None = None
+
+    # Sync tracking (Phase 2)
+    last_synced: datetime | None = None  # When this issue was last synced to/from filesystem
+    priority_source: str = "labels"  # "labels" or "field" - where priority came from
 
 
 class GitHubPRProviderData(BaseModel):

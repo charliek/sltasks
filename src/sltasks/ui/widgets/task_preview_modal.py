@@ -9,7 +9,8 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from ...models import FileProviderData, Task
+from ...models import FileProviderData, GitHubProviderData, Task
+from ...services.task_service import format_github_task_for_preview
 
 
 class TaskPreviewModal(ModalScreen[bool]):
@@ -86,18 +87,23 @@ class TaskPreviewModal(ModalScreen[bool]):
             yield Static("[e] Edit  [any key] Close", id="footer-bar")
 
     def _read_file_content(self) -> str:
-        """Read the full file content including YAML front matter."""
-        # Only filesystem tasks have readable files
-        if not isinstance(self._task_data.provider_data, FileProviderData):
-            return "(Preview not available for this provider)"
+        """Read or generate the task content for preview."""
+        # GitHub tasks: format using the preview function
+        if isinstance(self._task_data.provider_data, GitHubProviderData):
+            return format_github_task_for_preview(self._task_data)
 
-        if self._task_root is None:
+        # Filesystem tasks: read from file
+        if isinstance(self._task_data.provider_data, FileProviderData):
+            if self._task_root is None:
+                return "(File not found)"
+
+            filepath = self._task_root / self._task_data.id
+            if filepath.exists():
+                return filepath.read_text()
             return "(File not found)"
 
-        filepath = self._task_root / self._task_data.id
-        if filepath.exists():
-            return filepath.read_text()
-        return "(File not found)"
+        # Other providers not yet supported
+        return "(Preview not available for this provider)"
 
     def on_key(self, event) -> None:
         """Handle key events - scroll keys scroll, others dismiss."""

@@ -416,3 +416,31 @@ class TestConfigServiceEdgeCases:
 
         assert len(config.board.columns) == 3
         assert service.has_config_error
+
+
+class TestConfigServiceBanner:
+    """Tests for ConfigService.get_banner()."""
+
+    def test_get_banner_returns_configured_value(self, project_dir: Path):
+        """get_banner returns the configured banner value."""
+        config_file = project_dir / "sltasks.yml"
+        config_file.write_text("version: 1\nbanner: 'My Tasks'\n")
+
+        service = ConfigService(project_dir)
+
+        assert service.get_banner() == "My Tasks"
+
+    def test_get_banner_returns_default_when_not_set(self, project_dir: Path):
+        """get_banner returns 'sltasks' when banner not configured."""
+        config_file = project_dir / "sltasks.yml"
+        config_file.write_text("version: 1\n")
+
+        service = ConfigService(project_dir)
+
+        assert service.get_banner() == "sltasks"
+
+    def test_get_banner_returns_default_for_missing_file(self, project_dir: Path):
+        """get_banner returns 'sltasks' when no config file exists."""
+        service = ConfigService(project_dir)
+
+        assert service.get_banner() == "sltasks"

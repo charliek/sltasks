@@ -42,14 +42,14 @@ class TestTaskFromFrontmatter:
         )
         assert task.state == STATE_TODO
 
-    def test_from_frontmatter_missing_priority_uses_default(self):
-        """Missing priority defaults to 'medium'."""
+    def test_from_frontmatter_missing_priority_is_none(self):
+        """Missing priority results in None."""
         task = Task.from_frontmatter(
             task_id="task.md",
             metadata={},
             body="",
         )
-        assert task.priority == "medium"
+        assert task.priority is None
 
 
 class TestTaskDisplayTitle:
@@ -305,3 +305,80 @@ class TestBoardOrderDynamic:
         order.ensure_column("todo")
 
         assert order.columns["todo"] == ["task.md"]
+
+
+class TestTaskOptionalPriority:
+    """Tests for Task model with optional (None) priority."""
+
+    def test_task_default_priority_is_none(self):
+        """Task model defaults priority to None."""
+        task = Task(id="test.md", title="Test Task")
+        assert task.priority is None
+
+    def test_from_frontmatter_without_priority_is_none(self):
+        """Task.from_frontmatter without priority field results in None."""
+        metadata = {"title": "Test", "state": "todo"}
+        task = Task.from_frontmatter("test.md", metadata, "Body content")
+        assert task.priority is None
+
+    def test_from_frontmatter_with_priority_is_set(self):
+        """Task.from_frontmatter with priority field sets it correctly."""
+        metadata = {"title": "Test", "state": "todo", "priority": "high"}
+        task = Task.from_frontmatter("test.md", metadata, "Body content")
+        assert task.priority == "high"
+
+    def test_to_frontmatter_excludes_none_priority(self):
+        """Task.to_frontmatter excludes priority when None."""
+        task = Task(id="test.md", title="Test", state="todo", priority=None)
+        fm = task.to_frontmatter()
+        assert "priority" not in fm
+
+    def test_to_frontmatter_includes_set_priority(self):
+        """Task.to_frontmatter includes priority when set."""
+        task = Task(id="test.md", title="Test", state="todo", priority="high")
+        fm = task.to_frontmatter()
+        assert fm["priority"] == "high"
+
+
+class TestTaskImmutability:
+    """Tests for Task model immutability (frozen=True)."""
+
+    def test_task_is_immutable_attribute_assignment(self):
+        """Task model should raise error on attribute assignment."""
+        import pydantic
+        import pytest
+
+        task = Task(id="test.md", title="Original Title")
+
+        # Attempting to mutate should raise ValidationError
+        with pytest.raises(pydantic.ValidationError):
+            task.title = "New Title"
+
+    def test_task_model_copy_creates_new_instance(self):
+        """model_copy creates a new Task with updated values."""
+        original = Task(id="test.md", title="Original", priority="low")
+
+        updated = original.model_copy(update={"title": "Updated", "priority": "high"})
+
+        # Original unchanged
+        assert original.title == "Original"
+        assert original.priority == "low"
+
+        # Updated has new values
+        assert updated.title == "Updated"
+        assert updated.priority == "high"
+
+        # Same id preserved
+        assert updated.id == "test.md"
+
+    def test_task_model_copy_with_nested_list(self):
+        """model_copy correctly handles list fields like tags."""
+        original = Task(id="test.md", title="Test", tags=["tag1", "tag2"])
+
+        updated = original.model_copy(update={"tags": ["new-tag"]})
+
+        # Original tags unchanged
+        assert original.tags == ["tag1", "tag2"]
+
+        # Updated has new tags
+        assert updated.tags == ["new-tag"]

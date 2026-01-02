@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .provider_data import OptionalProviderData
 
@@ -14,7 +14,13 @@ STATE_ARCHIVED = "archived"
 
 
 class Task(BaseModel):
-    """Represents a single task from a markdown file."""
+    """Represents a single task from a markdown file.
+
+    This model is frozen (immutable) to prevent cache mutation bugs.
+    Use task.model_copy(update={...}) to create modified copies.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     # Task identification
     id: str  # e.g., "fix-login-bug.md" (filesystem), "PROJ-123" (Jira), "#456" (GitHub)
@@ -23,9 +29,10 @@ class Task(BaseModel):
     # Front matter fields (all optional with defaults)
     title: str | None = None  # Defaults to filename without .md
     state: str = STATE_TODO  # String to support custom states
-    priority: str = "medium"  # String to support configurable priorities
+    priority: str | None = None  # String to support configurable priorities, None = unset
     tags: list[str] = Field(default_factory=list)
     type: str | None = None  # Task type (feature, bug, task, etc.)
+    assignees: list[str] = Field(default_factory=list)  # GitHub assignees
     created: datetime | None = None
     updated: datetime | None = None
 
@@ -49,11 +56,14 @@ class Task(BaseModel):
         if self.title:
             data["title"] = self.title
         data["state"] = self.state
-        data["priority"] = self.priority
+        if self.priority:
+            data["priority"] = self.priority
         if self.tags:
             data["tags"] = self.tags
         if self.type:
             data["type"] = self.type
+        if self.assignees:
+            data["assignees"] = self.assignees
         if self.created:
             data["created"] = self.created.isoformat()
         if self.updated:
@@ -74,9 +84,10 @@ class Task(BaseModel):
             provider_data=provider_data,
             title=metadata.get("title"),
             state=metadata.get("state", STATE_TODO),
-            priority=metadata.get("priority", "medium"),
+            priority=metadata.get("priority"),
             tags=metadata.get("tags", []),
             type=metadata.get("type"),
+            assignees=metadata.get("assignees", []),
             created=_parse_datetime(metadata.get("created")),
             updated=_parse_datetime(metadata.get("updated")),
             body=body,

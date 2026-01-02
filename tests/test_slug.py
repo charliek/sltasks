@@ -1,6 +1,6 @@
 """Tests for slug generation utilities."""
 
-from sltasks.utils.slug import generate_filename, slugify
+from sltasks.utils.slug import generate_filename, slugify, slugify_column_id
 
 
 class TestSlugify:
@@ -75,3 +75,73 @@ class TestGenerateFilename:
     def test_special_characters(self):
         """Special characters are handled correctly."""
         assert generate_filename("What's the plan?") == "whats-the-plan.md"
+
+
+class TestSlugifyColumnId:
+    """Tests for the slugify_column_id function."""
+
+    def test_basic_conversion(self):
+        """Basic text with spaces converts to underscores."""
+        assert slugify_column_id("In progress") == "in_progress"
+        assert slugify_column_id("In Progress") == "in_progress"
+
+    def test_simple_word(self):
+        """Single word is just lowercased."""
+        assert slugify_column_id("Ready") == "ready"
+        assert slugify_column_id("DONE") == "done"
+        assert slugify_column_id("Backlog") == "backlog"
+
+    def test_multiple_words(self):
+        """Multiple words get underscores."""
+        assert slugify_column_id("In Review") == "in_review"
+        assert slugify_column_id("To Do") == "to_do"
+        assert slugify_column_id("On Hold") == "on_hold"
+
+    def test_unicode_removed(self):
+        """Unicode characters are stripped."""
+        assert slugify_column_id("Done ✓") == "done"
+        assert slugify_column_id("Ready ⭐") == "ready"
+        assert slugify_column_id("🚀 Launch") == "launch"
+
+    def test_numeric_prefix(self):
+        """IDs starting with numbers get 'col_' prefix."""
+        assert slugify_column_id("123 Numbers") == "col_123_numbers"
+        assert slugify_column_id("1st Priority") == "col_1st_priority"
+        assert slugify_column_id("42") == "col_42"
+
+    def test_hyphens_become_underscores(self):
+        """Hyphens are converted to underscores."""
+        assert slugify_column_id("in-progress") == "in_progress"
+        assert slugify_column_id("to-do") == "to_do"
+
+    def test_multiple_spaces_collapsed(self):
+        """Multiple spaces become single underscore."""
+        assert slugify_column_id("In   Progress") == "in_progress"
+
+    def test_special_characters_removed(self):
+        """Special characters are removed."""
+        assert slugify_column_id("In Progress!") == "in_progress"
+        assert slugify_column_id("Ready?") == "ready"
+        assert slugify_column_id("Test@#$%") == "test"
+
+    def test_empty_or_special_only(self):
+        """Empty or all-special input returns 'unknown'."""
+        assert slugify_column_id("") == "unknown"
+        assert slugify_column_id("@#$%") == "unknown"
+        assert slugify_column_id("✓✓✓") == "unknown"
+
+    def test_already_valid_id(self):
+        """Already valid IDs are unchanged."""
+        assert slugify_column_id("todo") == "todo"
+        assert slugify_column_id("in_progress") == "in_progress"
+        assert slugify_column_id("done") == "done"
+
+    def test_leading_trailing_underscores_stripped(self):
+        """Leading and trailing underscores are removed."""
+        assert slugify_column_id("  Ready  ") == "ready"
+        assert slugify_column_id("_todo_") == "todo"
+
+    def test_accented_characters(self):
+        """Accented characters are normalized."""
+        assert slugify_column_id("Prêt") == "pret"
+        assert slugify_column_id("À faire") == "a_faire"

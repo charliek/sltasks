@@ -106,6 +106,13 @@ TaskCard:focus {
     height: 1;
 }
 
+/* Sync indicator */
+.sync-indicator {
+    height: 1;
+    width: auto;
+    margin-left: 1;
+}
+
 .task-tags {
     height: 1;
     color: $text-muted;
@@ -115,6 +122,11 @@ TaskCard:focus {
     height: 1;
     color: $text-muted;
     text-style: italic;
+}
+
+.task-assignee {
+    height: 1;
+    color: lime;
 }
 
 /* Focus state for task title */

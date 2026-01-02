@@ -1,0 +1,92 @@
+# sltasks Board Configuration
+#
+# task_root: Relative path to directory containing task files
+#
+# Column constraints:
+#   - Minimum 2 columns, maximum 6 columns
+#   - Column IDs must be lowercase with underscores only
+#   - 'archived' is reserved and cannot be used as a column ID
+#
+# Status Aliases:
+#   - Optional list of alternative status values mapping to column ID
+#   - Useful for mapping existing file states or synonyms
+#
+# Task Types:
+#   - Define types with optional templates in {task_root}/templates/
+#   - Each type has: id, template (optional), color, type_alias (optional)
+#   - color: Named color (blue, red, etc.) or hex (#ff0000)
+#   - Templates provide default content and frontmatter for new tasks
+#
+# Priorities:
+#   - Define priority levels ordered from lowest to highest
+#   - Each priority has: id, label, color, symbol (optional), priority_alias (optional)
+#   - Order determines rank: first = lowest priority, last = highest
+#   - color: Named color (green, yellow, orange1, red, etc.) or hex (#ff0000)
+#
+# Example custom columns:
+#   columns:
+#     - id: backlog
+#       title: "Backlog"
+#       status_alias:
+#         - pending
+#     - id: in_progress
+#       title: "In Progress"
+#     - id: done
+#       title: "Done"
+#       status_alias:
+#         - completed
+#         - finished
+
+version: 1
+task_root: .tasks
+board:
+  columns:
+  - id: todo
+    title: To Do
+    status_alias:
+    - new
+  - id: in_progress
+    title: In Progress
+  - id: done
+    title: Done
+    status_alias:
+    - completed
+    - finished
+    - complete
+  types:
+  - id: feature
+    color: blue
+  - id: bug
+    color: red
+    type_alias:
+    - defect
+    - issue
+  - id: task
+    color: white
+    type_alias:
+    - chore
+  priorities:
+  - id: low
+    label: Low
+    color: green
+    symbol: "\u25CF"
+    priority_alias:
+    - trivial
+    - minor
+  - id: medium
+    label: Medium
+    color: yellow
+    symbol: "\u25CF"
+  - id: high
+    label: High
+    color: orange1
+    symbol: "\u25CF"
+    priority_alias:
+    - important
+  - id: critical
+    label: Critical
+    color: red
+    symbol: "\u25CF"
+    priority_alias:
+    - blocker
+    - urgent

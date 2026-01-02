@@ -51,6 +51,16 @@ class ConfigService:
         """Convenience method to get board configuration."""
         return self.get_config().board
 
+    def get_banner(self) -> str:
+        """Get the banner text for the app.
+
+        Returns configured banner, or 'sltasks' as fallback.
+        """
+        config = self.get_config()
+        if config.banner:
+            return config.banner
+        return "sltasks"
+
     def reload(self) -> None:
         """Clear cached configuration, forcing reload on next access."""
         self._config = None

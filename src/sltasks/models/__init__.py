@@ -12,9 +12,18 @@ from .provider_data import (
 from .sltasks_config import (
     BoardConfig,
     ColumnConfig,
+    GitHubConfig,
+    GitHubSyncConfig,
     PriorityConfig,
     SltasksConfig,
     TypeConfig,
+)
+from .sync import (
+    ChangeSet,
+    Conflict,
+    PushResult,
+    SyncResult,
+    SyncStatus,
 )
 from .task import (
     STATE_ARCHIVED,
@@ -32,15 +41,22 @@ __all__ = [
     "Board",
     "BoardConfig",
     "BoardOrder",
+    "ChangeSet",
     "ColumnConfig",
+    "Conflict",
     "FileProviderData",
+    "GitHubConfig",
     "GitHubPRProviderData",
     "GitHubProviderData",
+    "GitHubSyncConfig",
     "JiraProviderData",
     "OptionalProviderData",
     "PriorityConfig",
     "ProviderData",
+    "PushResult",
     "SltasksConfig",
+    "SyncResult",
+    "SyncStatus",
     "Task",
     "TypeConfig",
 ]

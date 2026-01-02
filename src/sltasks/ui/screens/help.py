@@ -110,6 +110,11 @@ class HelpScreen(ModalScreen):
                 yield self._help_row("state:todo", "Filter by state")
                 yield self._help_row("priority:high", "Filter by priority")
 
+            # GitHub Sync section
+            with Vertical(classes="help-section"):
+                yield Static("GitHub Sync", classes="section-title")
+                yield self._help_row("s", "Open sync screen (fetch/push)")
+
             # General section
             with Vertical(classes="help-section"):
                 yield Static("General", classes="section-title")

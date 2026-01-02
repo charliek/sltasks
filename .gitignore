@@ -9,8 +9,13 @@ wheels/
 # Virtual environments
 .venv
 
+# Environment variables (secrets)
+.env
+
 # claude local
 .claude/settings.local.json
 
 # Documentation build
 site-build/
+
+sltasks.log

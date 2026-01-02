@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from ..models import Board, BoardOrder, Task
@@ -12,6 +13,8 @@ from ..utils import now_utc
 
 if TYPE_CHECKING:
     from .config_service import ConfigService
+
+logger = logging.getLogger(__name__)
 
 
 class BoardService:
@@ -50,19 +53,28 @@ class BoardService:
         """
         task = self.repository.get_by_id(task_id)
         if task is None:
+            logger.debug("move_task: task not found: %s", task_id)
             return None
+
+        old_state = task.state
 
         # Resolve alias to canonical ID
         config = self._get_board_config()
         canonical_state = config.resolve_status(to_state)
 
-        task.state = canonical_state
-        task.updated = now_utc()
+        # Create updated task (immutable model)
+        updated_task = task.model_copy(
+            update={
+                "state": canonical_state,
+                "updated": now_utc(),
+            }
+        )
 
         # Save updates the file and yaml
-        self.repository.save(task)
+        self.repository.save(updated_task)
 
-        return task
+        logger.info("Task moved: %s (%s -> %s)", task_id, old_state, canonical_state)
+        return updated_task
 
     def move_task_left(self, task_id: str) -> Task | None:
         """Move task to the previous column (e.g., in_progress -> todo)."""
@@ -90,29 +102,27 @@ class BoardService:
 
     def archive_task(self, task_id: str) -> Task | None:
         """Move a task to the archived state."""
+        logger.info("Archiving task: %s", task_id)
         return self.move_task(task_id, STATE_ARCHIVED)
 
     def unarchive_task(self, task_id: str) -> Task | None:
         """Move an archived task to the first column."""
         task = self.repository.get_by_id(task_id)
         if task is None or task.state != STATE_ARCHIVED:
+            logger.debug("unarchive_task: task not found or not archived: %s", task_id)
             return None
 
         config = self._get_board_config()
         first_column = config.columns[0].id
+        logger.info("Unarchiving task: %s -> %s", task_id, first_column)
         return self.move_task(task_id, first_column)
 
     def get_board_order(self) -> BoardOrder:
         """Get the current board order."""
         return self.repository.get_board_order()
 
-    def save_board_order(self, order: BoardOrder) -> None:
-        """Save the board order."""
-        self.repository.save_board_order(order)
-
     def reorder_task(self, task_id: str, delta: int) -> bool:
-        """
-        Reorder task within its column.
+        """Reorder task within its column.
 
         Args:
             task_id: Task ID to reorder
@@ -121,29 +131,11 @@ class BoardService:
         Returns:
             True if task was moved
         """
-        task = self.repository.get_by_id(task_id)
-        if task is None:
-            return False
-
-        board_order = self.repository.get_board_order()
-        column = board_order.columns.get(task.state, [])
-
-        if task_id not in column:
-            return False
-
-        current_idx = column.index(task_id)
-        new_idx = current_idx + delta
-
-        # Check bounds
-        if new_idx < 0 or new_idx >= len(column):
-            return False
-
-        # Swap positions
-        column[current_idx], column[new_idx] = column[new_idx], column[current_idx]
-
-        # Save updated order
-        self.repository.save_board_order(board_order)
-        return True
+        result = self.repository.reorder_task(task_id, delta)
+        if result:
+            direction = "up" if delta < 0 else "down"
+            logger.debug("Task reordered %s: %s", direction, task_id)
+        return result
 
     def reload(self) -> None:
         """Reload board state from filesystem."""

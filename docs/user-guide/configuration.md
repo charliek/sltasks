@@ -6,8 +6,9 @@ The `sltasks.yml` file defines your board configuration. Place it in your projec
 
 ```yaml
 version: 1
-provider: file       # Storage backend: file (default), github, github-prs, jira
+provider: file       # Storage backend: file (default), github
 task_root: .tasks    # Directory for task files
+banner: "My Tasks"   # Optional: custom app title
 
 board:
   columns:
@@ -18,7 +19,21 @@ board:
     # ... priority definitions
 ```
 
-> **Note:** External providers (GitHub, Jira) are planned for future releases. Currently only `file` is supported.
+> **Note:** See [Providers](../providers/index.md) for provider-specific setup and configuration (File, GitHub).
+
+## App Banner
+
+The `banner` field sets the app title shown in the terminal header:
+
+```yaml
+version: 1
+banner: "My Project Tasks"
+```
+
+If not set:
+
+- **GitHub provider**: Uses the GitHub project title automatically
+- **File provider**: Defaults to "sltasks"
 
 ## Board configuration
 
@@ -273,3 +288,12 @@ All fields are optional. Missing fields use defaults:
 | `priority` | `medium` (configurable, see Priorities section) |
 | `type` | (none) |
 | `tags` | `[]` |
+
+## Provider-Specific Configuration
+
+sltasks supports multiple storage backends. Each provider has its own configuration options:
+
+- **[File Provider](../providers/file-provider.md)** - Local markdown files (default)
+- **[GitHub Provider](../providers/github-provider.md)** - GitHub Projects V2 integration
+
+See the [Providers](../providers/index.md) section for setup instructions and detailed configuration options for each provider.

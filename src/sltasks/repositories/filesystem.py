@@ -83,9 +83,9 @@ class FilesystemRepository:
 
         filepath = self.get_filepath(task)
 
-        # Set provider data if not already set
+        # Set provider data if not already set (task is immutable, create copy)
         if task.provider_data is None:
-            task.provider_data = FileProviderData()
+            task = task.model_copy(update={"provider_data": FileProviderData()})
 
         # Build front matter document
         post = frontmatter.Post(task.body)
@@ -128,6 +128,45 @@ class FilesystemRepository:
         """Save the board order to tasks.yaml."""
         self._board_order = order
         self._save_board_order()
+
+    def reorder_task(self, task_id: str, delta: int) -> bool:
+        """Reorder a task within its column.
+
+        Handles bounds checking, swapping positions, and persisting to tasks.yaml.
+
+        Args:
+            task_id: The task to move
+            delta: Position change (-1 = move up, +1 = move down)
+
+        Returns:
+            True if task was moved, False if at boundary or not found
+        """
+        # Get task to find its state/column
+        task = self.get_by_id(task_id)
+        if task is None:
+            return False
+
+        # Load board order
+        self._load_board_order()
+        if self._board_order is None:
+            return False
+
+        column = self._board_order.columns.get(task.state, [])
+        if task_id not in column:
+            return False
+
+        # Bounds check
+        current_idx = column.index(task_id)
+        new_idx = current_idx + delta
+        if new_idx < 0 or new_idx >= len(column):
+            return False
+
+        # Swap
+        column[current_idx], column[new_idx] = column[new_idx], column[current_idx]
+
+        # Persist
+        self._save_board_order()
+        return True
 
     def rename_in_board_order(self, old_task_id: str, new_task_id: str) -> None:
         """Rename a task in the board order."""
@@ -200,14 +239,39 @@ class FilesystemRepository:
             config = self._get_board_config()
             canonical_state = config.resolve_status(task.state)
             if canonical_state != task.state:
+                # Task is immutable, create copy with normalized state
                 # We don't save immediately - file keeps alias until next save
-                task.state = canonical_state
+                task = task.model_copy(update={"state": canonical_state})
 
             return task
         except Exception:
             # Skip files that can't be parsed
             # TODO: Consider logging this
             return None
+
+    def has_github_metadata(self, task_id: str) -> bool:
+        """Check if a task file has GitHub sync metadata.
+
+        This indicates the file was synced from GitHub rather than created locally.
+        Used by the push engine to identify local-only files.
+
+        Args:
+            task_id: The task ID (filename)
+
+        Returns:
+            True if file has github: section with synced: true
+        """
+        filepath = self.task_root / task_id
+        if not filepath.exists():
+            return False
+
+        try:
+            post = frontmatter.load(filepath)  # pyrefly: ignore[bad-argument-type]
+            metadata = dict(post.metadata)  # pyrefly: ignore[bad-argument-type]
+            github_data = metadata.get("github", {})
+            return isinstance(github_data, dict) and github_data.get("synced", False) is True
+        except Exception:
+            return False
 
     def _load_board_order(self) -> None:
         """Load tasks.yaml if it exists."""

@@ -105,6 +105,18 @@ class TypeConfig(BaseModel):
         """
         return self.canonical_alias or self.id
 
+    def matches_label(self, label: str) -> bool:
+        """Check if a label matches this type config.
+
+        Matches against id, type_alias list, or canonical_alias (case-insensitive).
+        """
+        label_lower = label.lower()
+        if self.id.lower() == label_lower:
+            return True
+        if any(alias.lower() == label_lower for alias in self.type_alias):
+            return True
+        return bool(self.canonical_alias and self.canonical_alias.lower() == label_lower)
+
 
 def _validate_color(v: str) -> str:
     """Validate color is a valid named color or hex code."""
@@ -158,6 +170,18 @@ class PriorityConfig(BaseModel):
         Returns canonical_alias if set, otherwise the id.
         """
         return self.canonical_alias or self.id
+
+    def matches_label(self, label: str) -> bool:
+        """Check if a label matches this priority config.
+
+        Matches against id, priority_alias list, or canonical_alias (case-insensitive).
+        """
+        label_lower = label.lower()
+        if self.id.lower() == label_lower:
+            return True
+        if any(alias.lower() == label_lower for alias in self.priority_alias):
+            return True
+        return bool(self.canonical_alias and self.canonical_alias.lower() == label_lower)
 
 
 class BoardConfig(BaseModel):
@@ -440,16 +464,138 @@ class BoardConfig(BaseModel):
         )
 
 
+class GitHubSyncConfig(BaseModel):
+    """GitHub filesystem sync configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable filesystem sync for GitHub issues",
+    )
+    task_root: str | None = Field(
+        default=None,
+        description="Override task_root for synced files (defaults to global task_root)",
+    )
+    filters: list[str] = Field(
+        default_factory=list,
+        description="GitHub search syntax filters (OR'd together)",
+    )
+
+
+class GitHubConfig(BaseModel):
+    """GitHub Projects configuration."""
+
+    base_url: str = Field(
+        default="api.github.com",
+        description="GitHub API base URL (use custom domain for Enterprise)",
+    )
+    project_url: str | None = Field(
+        default=None,
+        description="Full project URL (e.g., https://github.com/users/owner/projects/N)",
+    )
+    owner: str | None = Field(
+        default=None,
+        description="Project owner (alternative to project_url)",
+    )
+    owner_type: str = Field(
+        default="user",
+        description="Owner type: 'user' or 'org'",
+    )
+    project_number: int | None = Field(
+        default=None,
+        description="Project number (alternative to project_url)",
+    )
+    default_repo: str | None = Field(
+        default=None,
+        description="Default repository for new issues (owner/repo format)",
+    )
+    allowed_repos: list[str] = Field(
+        default_factory=list,
+        description="Allowed repositories for issues (auto-detected if empty)",
+    )
+    default_status: str | None = Field(
+        default=None,
+        description="Default Status field value for new issues (column ID)",
+    )
+    priority_field: str | None = Field(
+        default=None,
+        description="Name of GitHub project field to use for priority (e.g., 'Priority')",
+    )
+    featured_labels: list[str] = Field(
+        default_factory=list,
+        description="Labels to highlight in TUI for quick assignment",
+    )
+    include_closed: bool = Field(
+        default=False,
+        description="Include closed issues in the board",
+    )
+    include_prs: bool = Field(
+        default=True,
+        description="Include pull requests in the board",
+    )
+    include_drafts: bool = Field(
+        default=False,
+        description="Include draft issues in the board",
+    )
+    sync: GitHubSyncConfig | None = Field(
+        default=None,
+        description="Filesystem sync configuration",
+    )
+
+    @field_validator("owner_type")
+    @classmethod
+    def validate_owner_type(cls, v: str) -> str:
+        """Validate owner_type is 'user' or 'org'."""
+        if v not in ("user", "org"):
+            raise ValueError("owner_type must be 'user' or 'org'")
+        return v
+
+    def get_project_info(self) -> tuple[str, str, int]:
+        """Extract owner, owner_type, and project_number from config.
+
+        Returns:
+            Tuple of (owner, owner_type, project_number)
+
+        Raises:
+            ValueError: If project identification is incomplete
+        """
+        if self.project_url:
+            # Parse URL: https://github.com/users/owner/projects/N
+            # or: https://github.com/orgs/owner/projects/N
+            import re
+
+            match = re.match(
+                r"https?://[^/]+/(users|orgs)/([^/]+)/projects/(\d+)",
+                self.project_url,
+            )
+            if not match:
+                raise ValueError(f"Invalid project URL format: {self.project_url}")
+
+            owner_type = "user" if match.group(1) == "users" else "org"
+            return match.group(2), owner_type, int(match.group(3))
+
+        if self.owner and self.project_number is not None:
+            return self.owner, self.owner_type, self.project_number
+
+        raise ValueError(
+            "GitHub config requires either 'project_url' or both 'owner' and 'project_number'"
+        )
+
+
 class SltasksConfig(BaseModel):
     """Root configuration from sltasks.yml."""
 
     version: int = 1
+    banner: str | None = Field(default=None, description="Display text for the app banner")
     provider: str = Field(
         default="file",
         description="Storage provider: file, github, github-prs, jira",
     )
     task_root: str = Field(default=".tasks", description="Relative path to tasks directory")
     board: BoardConfig = Field(default_factory=BoardConfig.default)
+    github: GitHubConfig | None = Field(
+        default=None,
+        description="GitHub Projects configuration (required when provider is 'github')",
+    )
 
     # Valid provider values
     VALID_PROVIDERS: ClassVar[tuple[str, ...]] = ("file", "github", "github-prs", "jira")

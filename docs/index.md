@@ -13,6 +13,7 @@ A terminal-based Kanban TUI for markdown task management.
 - **Git-friendly** - All data is plain text, perfect for version control
 - **Zero configuration** - Works out of the box with sensible defaults
 - **Custom columns** - Define your own workflow states
+- **Multiple backends** - Use local files or sync with GitHub Projects
 
 ## Quick Example
 
@@ -33,4 +34,5 @@ A terminal-based Kanban TUI for markdown task management.
 ## Next Steps
 
 - [Getting Started](getting-started/installation.md) - Installation and quick start guide
+- [Providers](providers/index.md) - Choose between local files or GitHub Projects
 - [User Guide](user-guide/configuration.md) - Configuration and usage

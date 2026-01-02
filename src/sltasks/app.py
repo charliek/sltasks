@@ -1,11 +1,15 @@
 """sltasks TUI Application."""
 
+import logging
+
 from textual.app import App
 from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from .config import Settings
-from .repositories import FilesystemRepository
+from .github import GitHubClient, GitHubClientError
+from .models.sync import SyncStatus
+from .repositories import FilesystemRepository, GitHubProjectsRepository, RepositoryProtocol
 from .services import (
     BoardService,
     ConfigService,
@@ -13,6 +17,7 @@ from .services import (
     TaskService,
     TemplateService,
 )
+from .sync.engine import GitHubSyncEngine
 from .ui.screens.board import BoardScreen
 from .ui.widgets import (
     CommandBar,
@@ -21,6 +26,8 @@ from .ui.widgets import (
     TaskPreviewModal,
     TypeSelectorModal,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SltasksApp(App):
@@ -68,6 +75,8 @@ class SltasksApp(App):
         # Filter mode
         Binding("/", "enter_filter", "Filter", show=True),
         Binding("escape", "escape", "Back", show=False, priority=True),
+        # Sync operations (fetch/push via sync screen)
+        Binding("s", "sync_screen", "Sync", show=True),
     ]
 
     SCREENS = {
@@ -81,24 +90,168 @@ class SltasksApp(App):
 
     def _init_services(self) -> None:
         """Initialize repository and services."""
+        logger.info("Initializing services")
+        logger.debug("Project root: %s", self.settings.project_root.absolute())
+
         self.config_service = ConfigService(self.settings.project_root)
-        # Get task_root from config service (computed from project_root + config.task_root)
-        task_root = self.config_service.task_root
-        self.repository = FilesystemRepository(task_root, self.config_service)
+        config = self.config_service.get_config()
+
+        # Log configuration details
+        logger.info("Provider: %s", config.provider)
+        board_config = config.board
+        logger.debug(
+            "Board config: %d columns, %d types, %d priorities",
+            len(board_config.columns),
+            len(board_config.types),
+            len(board_config.priorities),
+        )
+        logger.debug("Columns: %s", [col.id for col in board_config.columns])
+
+        # Initialize repository based on provider
+        self.repository: RepositoryProtocol
+        if config.provider == "github":
+            logger.info("Using GitHub Projects repository")
+            if config.github:
+                logger.debug("GitHub project URL: %s", config.github.project_url)
+                logger.debug("GitHub default repo: %s", config.github.default_repo)
+            self.repository = GitHubProjectsRepository(self.config_service)
+        else:
+            # Default to filesystem
+            task_root = self.config_service.task_root
+            logger.info("Using filesystem repository: %s", task_root)
+            self.repository = FilesystemRepository(task_root, self.config_service)
+
+        # Validate repository configuration
+        logger.debug("Validating repository configuration")
+        valid, error = self.repository.validate()
+        if not valid:
+            # Store error for display on mount
+            logger.error("Repository validation failed: %s", error)
+            self._init_error = error
+        else:
+            logger.info("Repository validation successful")
+            self._init_error = None
+
         self.template_service = TemplateService(self.config_service)
         self.task_service = TaskService(self.repository, self.config_service, self.template_service)
         self.board_service = BoardService(self.repository, self.config_service)
         self.filter_service = FilterService()
 
+        # Initialize sync engine if GitHub sync is enabled
+        self.sync_engine: GitHubSyncEngine | None = None
+        self._sync_statuses: dict[str, SyncStatus] = {}
+        if (
+            config.provider == "github"
+            and config.github
+            and config.github.sync
+            and config.github.sync.enabled
+        ):
+            logger.info("GitHub sync enabled, initializing sync engine")
+            try:
+                client = GitHubClient.from_environment(
+                    base_url=config.github.base_url or "api.github.com"
+                )
+                self.sync_engine = GitHubSyncEngine(
+                    self.config_service,
+                    client,
+                    self.config_service.task_root,
+                )
+            except Exception as e:
+                logger.warning("Failed to initialize sync engine: %s", e)
+
+        # Update app banner/title
+        self._update_banner()
+
+        logger.info("Services initialized")
+
+    def _update_banner(self) -> None:
+        """Update app banner/title based on config and provider."""
+        banner = self.config_service.get_banner()
+
+        # For GitHub provider, use project title if no explicit banner configured
+        if banner == "sltasks" and hasattr(self.repository, "get_board_metadata"):
+            try:
+                metadata = self.repository.get_board_metadata()
+                if metadata.get("project_title"):
+                    banner = metadata["project_title"]
+            except Exception:
+                pass  # Keep default on error
+
+        self.title = banner
+
+    @property
+    def sync_statuses(self) -> dict[str, SyncStatus]:
+        """Get current sync statuses for all tasks.
+
+        Lazily computes sync statuses from the sync engine's detect_changes().
+        Returns empty dict if sync is not enabled.
+        """
+        return self._sync_statuses
+
+    def refresh_sync_statuses(self) -> None:
+        """Refresh sync statuses from the sync engine."""
+        if not self.sync_engine:
+            self._sync_statuses = {}
+            return
+
+        try:
+            changes = self.sync_engine.detect_changes()
+
+            # Build status map
+            statuses: dict[str, SyncStatus] = {}
+
+            # Mark tasks that need to be pulled
+            for task_id in changes.to_pull:
+                statuses[task_id] = SyncStatus.REMOTE_MODIFIED
+
+            # Mark tasks that need to be pushed
+            for task_id in changes.to_push:
+                # Check if it's a local-only file or a modified synced file
+                if "#" not in task_id:  # Local-only files don't have repo#number format
+                    statuses[task_id] = SyncStatus.LOCAL_ONLY
+                else:
+                    statuses[task_id] = SyncStatus.LOCAL_MODIFIED
+
+            # Mark conflicts
+            for conflict in changes.conflicts:
+                statuses[conflict.task_id] = SyncStatus.CONFLICT
+
+            # Mark remaining synced files as synced (those not in any change category)
+            synced_files = self.sync_engine._scan_synced_files()
+            for task in synced_files:
+                if task.id not in statuses:
+                    statuses[task.id] = SyncStatus.SYNCED
+
+            self._sync_statuses = statuses
+            logger.debug("Refreshed sync statuses: %d tasks", len(statuses))
+
+        except Exception as e:
+            logger.warning("Failed to refresh sync statuses: %s", e)
+            self._sync_statuses = {}
+
     def on_mount(self) -> None:
         """Called when app is mounted."""
-        # Ensure tasks directory exists
-        self.repository.ensure_directory()
+        # Check for initialization errors
+        if self._init_error:
+            self.notify(f"Error: {self._init_error}", severity="error", timeout=10)
+
+        # Ensure tasks directory exists (filesystem only)
+        if hasattr(self.repository, "ensure_directory"):
+            self.repository.ensure_directory()
+
+        # Refresh sync statuses if sync is enabled
+        if self.sync_engine:
+            self.refresh_sync_statuses()
+
         # Push the board screen
         self.push_screen("board")
 
     def action_refresh(self) -> None:
         """Refresh the board."""
+        # Refresh sync statuses if enabled
+        if self.sync_engine:
+            self.refresh_sync_statuses()
+
         screen = self.screen
         if isinstance(screen, BoardScreen):
             screen.refresh_board()
@@ -210,11 +363,17 @@ class SltasksApp(App):
         # Suspend TUI and open editor
         task_root = self.config_service.task_root
         with self.suspend():
-            self.task_service.open_in_editor(task, task_root)
+            success = self.task_service.open_in_editor(task, task_root)
 
         # Reload and refresh
-        self.board_service.reload()
-        screen.refresh_board()
+        try:
+            self.board_service.reload()
+            screen.refresh_board()
+            if success:
+                self.notify("Task updated", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to save task: %s", e)
+            self.notify(f"Failed to save: {e}", severity="error", timeout=5)
 
     def action_preview_task(self) -> None:
         """Show task preview modal."""
@@ -248,11 +407,17 @@ class SltasksApp(App):
         # Open in external editor
         task_root = self.config_service.task_root
         with self.suspend():
-            self.task_service.open_in_editor(task, task_root)
+            success = self.task_service.open_in_editor(task, task_root)
 
         # Reload and refresh
-        self.board_service.reload()
-        screen.refresh_board()
+        try:
+            self.board_service.reload()
+            screen.refresh_board()
+            if success:
+                self.notify("Task updated", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to save task: %s", e)
+            self.notify(f"Failed to save: {e}", severity="error", timeout=5)
 
     def action_move_task_left(self) -> None:
         """Move current task to previous column."""
@@ -265,10 +430,19 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        result = self.board_service.move_task_left(task_id)
-        if result and result.state != task.state:
-            screen.refresh_board(focus_task_id=task_id)
-            self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+        original_state = task.state  # Capture before modification (same object in cache)
+        try:
+            result = self.board_service.move_task_left(task_id)
+            if result is None:
+                self.notify("Cannot move task", severity="warning", timeout=2)
+            elif result.state != original_state:
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+            else:
+                self.notify("Already at first column", severity="information", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to move task left: %s", e)
+            self.notify(f"Failed to move: {e}", severity="error", timeout=5)
 
     def action_move_task_right(self) -> None:
         """Move current task to next column."""
@@ -281,10 +455,19 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        result = self.board_service.move_task_right(task_id)
-        if result and result.state != task.state:
-            screen.refresh_board(focus_task_id=task_id)
-            self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+        original_state = task.state  # Capture before modification (same object in cache)
+        try:
+            result = self.board_service.move_task_right(task_id)
+            if result is None:
+                self.notify("Cannot move task", severity="warning", timeout=2)
+            elif result.state != original_state:
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify(f"Moved to {result.state.replace('_', ' ')}", timeout=2)
+            else:
+                self.notify("Already at last column", severity="information", timeout=2)
+        except GitHubClientError as e:
+            logger.error("Failed to move task right: %s", e)
+            self.notify(f"Failed to move: {e}", severity="error", timeout=5)
 
     def action_move_task_up(self) -> None:
         """Move current task up in column."""
@@ -297,8 +480,15 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        if self.board_service.reorder_task(task_id, -1):
-            screen.refresh_board(focus_task_id=task_id)
+        try:
+            if self.board_service.reorder_task(task_id, -1):
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify("Moved up", timeout=1)
+            else:
+                self.notify("Already at top", severity="information", timeout=1)
+        except GitHubClientError as e:
+            logger.error("Failed to reorder task: %s", e)
+            self.notify(f"Failed to reorder: {e}", severity="error", timeout=5)
 
     def action_move_task_down(self) -> None:
         """Move current task down in column."""
@@ -311,8 +501,15 @@ class SltasksApp(App):
             return
 
         task_id = task.id
-        if self.board_service.reorder_task(task_id, 1):
-            screen.refresh_board(focus_task_id=task_id)
+        try:
+            if self.board_service.reorder_task(task_id, 1):
+                screen.refresh_board(focus_task_id=task_id)
+                self.notify("Moved down", timeout=1)
+            else:
+                self.notify("Already at bottom", severity="information", timeout=1)
+        except GitHubClientError as e:
+            logger.error("Failed to reorder task: %s", e)
+            self.notify(f"Failed to reorder: {e}", severity="error", timeout=5)
 
     def action_archive_task(self) -> None:
         """Archive the current task."""
@@ -445,6 +642,33 @@ class SltasksApp(App):
 
         screen.load_tasks()
         screen._update_focus()
+
+    # Sync actions
+    def action_sync_screen(self) -> None:
+        """Open sync management screen."""
+        config = self.config_service.get_config()
+        if not config.github or not config.github.sync or not config.github.sync.enabled:
+            self.notify("Sync not enabled", severity="warning", timeout=2)
+            return
+
+        if not self.sync_engine:
+            self.notify("Sync engine not initialized", severity="error", timeout=3)
+            return
+
+        from .ui.screens.sync_screen import SyncScreen
+
+        self.push_screen(
+            SyncScreen(self.sync_engine),
+            callback=self._handle_sync_screen_close,
+        )
+
+    def _handle_sync_screen_close(self, _result: None) -> None:
+        """Handle sync screen close - refresh the board."""
+        # Refresh sync statuses and board after sync operations
+        self.refresh_sync_statuses()
+        screen = self.screen
+        if isinstance(screen, BoardScreen):
+            screen.refresh_board()
 
 
 def run(settings: Settings | None = None) -> None:

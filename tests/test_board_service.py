@@ -1,6 +1,7 @@
 """Integration tests for BoardService."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -221,3 +222,41 @@ class TestBoardServiceReorder:
         assert result is False
         order = repo.get_board_order()
         assert order.columns["todo"] == ["task1.md", "task2.md"]
+
+    def test_reorder_task_calls_repository_reorder(
+        self, board_service: BoardService, task_dir: Path, repo: FilesystemRepository
+    ):
+        """reorder_task calls repository.reorder_task with correct args."""
+        create_task_file(task_dir, "task1.md", "todo")
+        create_task_file(task_dir, "task2.md", "todo")
+        board_service.load_board()
+        order = repo.get_board_order()
+        order.columns["todo"] = ["task1.md", "task2.md"]
+        repo.save_board_order(order)
+
+        with patch.object(repo, "reorder_task") as mock_reorder:
+            mock_reorder.return_value = True
+            result = board_service.reorder_task("task1.md", 1)  # Move down
+
+        assert result is True
+        # BoardService now passes through delta directly to repository
+        mock_reorder.assert_called_once_with("task1.md", 1)
+
+    def test_reorder_task_passes_delta_to_repository(
+        self, board_service: BoardService, task_dir: Path, repo: FilesystemRepository
+    ):
+        """reorder_task passes delta to repository.reorder_task."""
+        create_task_file(task_dir, "task1.md", "todo")
+        create_task_file(task_dir, "task2.md", "todo")
+        board_service.load_board()
+        order = repo.get_board_order()
+        order.columns["todo"] = ["task1.md", "task2.md"]
+        repo.save_board_order(order)
+
+        with patch.object(repo, "reorder_task") as mock_reorder:
+            mock_reorder.return_value = True
+            result = board_service.reorder_task("task2.md", -1)  # Move up
+
+        assert result is True
+        # BoardService passes delta directly to repository
+        mock_reorder.assert_called_once_with("task2.md", -1)

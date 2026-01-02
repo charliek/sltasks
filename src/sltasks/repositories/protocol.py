@@ -76,6 +76,21 @@ class RepositoryProtocol(Protocol):
         """
         ...
 
+    def reorder_task(self, task_id: str, delta: int) -> bool:
+        """Reorder a task within its column.
+
+        Handles the full reorder operation: bounds checking, swapping positions
+        in the board order, and persisting the change to the backend.
+
+        Args:
+            task_id: The task to move
+            delta: Position change (-1 = move up, +1 = move down)
+
+        Returns:
+            True if task was moved, False if at boundary or not found
+        """
+        ...
+
     def reload(self) -> None:
         """Clear caches and reload from source.
 

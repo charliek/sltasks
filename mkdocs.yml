@@ -79,6 +79,10 @@ nav:
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
+  - Providers:
+      - Overview: providers/index.md
+      - File Provider: providers/file-provider.md
+      - GitHub Provider: providers/github-provider.md
   - User Guide:
       - Configuration: user-guide/configuration.md
       - CLI: user-guide/cli.md

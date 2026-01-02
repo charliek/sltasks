@@ -70,7 +70,7 @@ class TestFilesystemRepository:
         task = tasks[0]
         assert task.id == "minimal.md"
         assert task.state == STATE_TODO  # default
-        assert task.priority == "medium"  # default
+        assert task.priority is None  # default (unset)
 
     def test_get_by_id_returns_task(self, task_dir: Path, repo: FilesystemRepository):
         """get_by_id returns the task if it exists."""
@@ -126,10 +126,11 @@ class TestFilesystemRepository:
         )
         repo.save(task)
 
-        # Update it
-        task.title = "Updated Title"
-        task.state = STATE_IN_PROGRESS
-        repo.save(task)
+        # Update it (Task is frozen, use model_copy)
+        updated_task = task.model_copy(
+            update={"title": "Updated Title", "state": STATE_IN_PROGRESS}
+        )
+        repo.save(updated_task)
 
         # Reload and verify
         reloaded = repo.get_by_id("update-me.md")
@@ -292,3 +293,69 @@ class TestReload:
 
         assert task is not None
         assert task.state == STATE_TODO  # Normalized from 'new'
+
+
+class TestOptionalPriority:
+    """Tests for optional (None) priority support."""
+
+    def test_save_task_with_none_priority(self, repo: FilesystemRepository):
+        """Saving a task with None priority works correctly."""
+        task = Task(
+            id="no-priority.md",
+            title="Task Without Priority",
+            state=STATE_TODO,
+            priority=None,
+        )
+        repo.save(task)
+
+        # Read back and verify
+        loaded = repo.get_by_id("no-priority.md")
+        assert loaded is not None
+        assert loaded.priority is None
+
+    def test_load_task_without_priority_field(self, task_dir: Path, repo: FilesystemRepository):
+        """Loading a task file without priority field results in None priority."""
+        # Create file without priority in frontmatter
+        (task_dir / "missing-priority.md").write_text(
+            "---\ntitle: Missing Priority\nstate: todo\n---\nBody content\n"
+        )
+
+        repo.reload()
+        task = repo.get_by_id("missing-priority.md")
+
+        assert task is not None
+        assert task.priority is None
+
+    def test_save_and_load_preserves_none_priority(self, repo: FilesystemRepository):
+        """Round-trip save/load preserves None priority."""
+        task = Task(
+            id="roundtrip.md",
+            title="Roundtrip Test",
+            state=STATE_TODO,
+            priority=None,
+            tags=["test"],
+        )
+        repo.save(task)
+
+        # Reload and verify
+        repo.reload()
+        loaded = repo.get_by_id("roundtrip.md")
+        assert loaded is not None
+        assert loaded.priority is None
+        assert loaded.tags == ["test"]
+
+    def test_save_and_load_preserves_assignees(self, repo: FilesystemRepository):
+        """Round-trip save/load preserves assignees."""
+        task = Task(
+            id="with-assignees.md",
+            title="Has Assignees",
+            state=STATE_TODO,
+            assignees=["alice", "bob"],
+        )
+        repo.save(task)
+
+        # Reload and verify
+        repo.reload()
+        loaded = repo.get_by_id("with-assignees.md")
+        assert loaded is not None
+        assert loaded.assignees == ["alice", "bob"]
