@@ -35,11 +35,11 @@ uv run pytest
 # Run single test
 uv run pytest tests/test_models.py::test_function_name
 
-# Build documentation
-uv run mkdocs build -d site-build
+# Build documentation (into site-build/, same as CI)
+uv run --locked zensical build --strict
 
 # Serve documentation locally
-uv run mkdocs serve
+uv run --locked zensical serve
 
 # Linting
 ./scripts/lint.sh                  # Run all lint checks
